@@ -1115,86 +1115,164 @@
   }
 
   /**
-   * Evaluates winding dirt trail network mask and W-profile wear for Beach Camp.
-   * Features:
-   * 1. Continental West Highway: Entering from Sector 4 (W) into Camp Hub (Sector 5)
-   * 2. Continental North Highway: Entering from Sector 2 (N) into Camp Hub (Sector 5)
-   * 3. Pier Causeway: Connecting Camp Hub (Sector 5) out to the Pier & Dock in Sector 6
-   * 4. Beach Campfire Spur: Leading south from Camp Hub to the sandy campfire
+   * Catmull-Rom Polyline Trail & Road System.
+   * Replaces 1D axis-aligned bands with a continuous 2D networked polyline system:
+   * - West Highway: Curves smoothly from western hinterland into Camp Hub
+   * - North Highway: Curves south across the timber river bridge into Camp Hub (smooth organic fork with West)
+   * - Pier Causeway: Extends seamlessly east-southeast from Camp Hub to the dock
+   * - Campfire Spur: Branches off near Camp Hub down to the beach campfire
    */
-  function getTrailInfo(wx, wy) {
-    let bestIntensity = 0;
-    let bestRut = 0;
-    let bestCenterRidge = 0;
-    let bestShoulder = 0;
+  const TRAIL_PATHS = [
+    {
+      id: 'west-highway',
+      widthAtT: (t) => 12 + t * 10,      // narrow inland → wide at Camp Hub
+      points: [
+        { x: -40, y: 520 },
+        { x: 220, y: 545 },
+        { x: 480, y: 600 },
+        { x: 720, y: 640 },
+        { x: 900, y: 672 },
+        { x: 960, y: 682 }               // Camp Hub
+      ]
+    },
+    {
+      id: 'north-highway',
+      widthAtT: (t) => 10 + t * 10,
+      points: [
+        { x: 870, y: -40 },
+        { x: 865, y: 200 },
+        { x: 920, y: 450 },              // Timber river bridge crossing
+        { x: 935, y: 580 },
+        { x: 960, y: 682 }               // shared with West → smooth organic fork
+      ]
+    },
+    {
+      id: 'pier-causeway',
+      widthAtT: (t) => 20 - t * 6,       // wide at camp, narrows to pier
+      points: [
+        { x: 960, y: 682 },              // shared Camp Hub junction
+        { x: 1055, y: 715 },
+        { x: 1160, y: 755 },
+        { x: 1240, y: 775 }              // Pier & Dock
+      ]
+    },
+    {
+      id: 'campfire-spur',
+      widthAtT: (t) => 9 - t * 2,
+      points: [
+        { x: 985, y: 705 },              // branches off West-near-hub
+        { x: 1010, y: 765 },
+        { x: 1038, y: 835 }              // Campfire
+      ]
+    }
+  ];
 
-    function evaluatePathPoint(centerCoord, queryCoord, halfWidth) {
-      const dist = Math.abs(queryCoord - centerCoord);
-      if (dist < halfWidth) {
-        const u = (queryCoord - centerCoord) / halfWidth; // [-1, 1]
-        const absU = Math.abs(u);
-        const overall = 1.0 - absU;
-        const rutVal = Math.max(0, 1.0 - (Math.abs(absU - 0.48) / 0.26));
-        const centerVal = Math.max(0, 1.0 - (absU / 0.22));
-        const shoulderVal = absU > 0.70 ? (absU - 0.70) / 0.30 : 0;
+  const trailSegments = [];
+  const TRAIL_BUCKET_SIZE = 64;
+  const TRAIL_BUCKET_COLS = Math.ceil(WORLD_WIDTH / TRAIL_BUCKET_SIZE) + 2;
+  const TRAIL_BUCKET_ROWS = Math.ceil(WORLD_HEIGHT / TRAIL_BUCKET_SIZE) + 2;
+  const trailBuckets = new Array(TRAIL_BUCKET_COLS * TRAIL_BUCKET_ROWS);
 
-        if (overall > bestIntensity) {
-          bestIntensity = overall;
-          bestRut = rutVal;
-          bestCenterRidge = centerVal;
-          bestShoulder = shoulderVal;
+  function initTrailSystem() {
+    trailSegments.length = 0;
+    for (let i = 0; i < trailBuckets.length; i++) trailBuckets[i] = [];
+
+    for (const path of TRAIL_PATHS) {
+      const n = path.points.length;
+      for (let i = 0; i < n - 1; i++) {
+        const p0 = path.points[Math.max(0, i - 1)];
+        const p1 = path.points[i];
+        const p2 = path.points[i + 1];
+        const p3 = path.points[Math.min(n - 1, i + 2)];
+
+        const steps = 14;
+        for (let s = 0; s < steps; s++) {
+          const t  = s / steps;
+          const tN = (s + 1) / steps;
+          const t2 = t * t, t3 = t2 * t;
+          const n2 = tN * tN, n3 = n2 * tN;
+
+          const x1 = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t  + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2  + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3);
+          const y1 = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t  + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2  + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3);
+          const x2 = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * tN + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * n2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * n3);
+          const y2 = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * tN + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * n2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * n3);
+
+          // Slight organic wander so it isn't geometric — 2D noise in BOTH axes
+          const gT = (i + t) / (n - 1);
+          const wx1 = simplex.noise2D((i + t) * 1.7, 401.3) * 3.5;
+          const wy1 = simplex.noise2D((i + t) * 1.7, 733.1) * 3.5;
+          const wx2 = simplex.noise2D((i + tN) * 1.7, 401.3) * 3.5;
+          const wy2 = simplex.noise2D((i + tN) * 1.7, 733.1) * 3.5;
+
+          const dx = (x2 + wx2) - (x1 + wx1);
+          const dy = (y2 + wy2) - (y1 + wy1);
+          const len = Math.hypot(dx, dy) || 1;
+          const hw = path.widthAtT(gT);
+
+          const seg = {
+            x1: x1 + wx1, y1: y1 + wy1,
+            dx: dx / len, dy: dy / len,
+            len, halfWidth: hw,
+            minX: Math.min(x1 + wx1, x1 + wx1 + dx) - hw * 2.2,
+            maxX: Math.max(x1 + wx1, x1 + wx1 + dx) + hw * 2.2,
+            minY: Math.min(y1 + wy1, y1 + wy1 + dy) - hw * 2.2,
+            maxY: Math.max(y1 + wy1, y1 + wy1 + dy) + hw * 2.2
+          };
+          trailSegments.push(seg);
+
+          const c0 = Math.max(0, Math.floor(seg.minX / TRAIL_BUCKET_SIZE));
+          const c1 = Math.min(TRAIL_BUCKET_COLS - 1, Math.floor(seg.maxX / TRAIL_BUCKET_SIZE));
+          const r0 = Math.max(0, Math.floor(seg.minY / TRAIL_BUCKET_SIZE));
+          const r1 = Math.min(TRAIL_BUCKET_ROWS - 1, Math.floor(seg.maxY / TRAIL_BUCKET_SIZE));
+          for (let r = r0; r <= r1; r++) {
+            for (let c = c0; c <= c1; c++) {
+              trailBuckets[r * TRAIL_BUCKET_COLS + c].push(seg);
+            }
+          }
         }
       }
     }
+  }
+  initTrailSystem();
 
-    // 1. Continental West Highway (from wx: 0 to 980, entering from Sector 4 into Camp Sector 5)
-    if (wx >= 0 && wx <= 990 && wy >= 380 && wy <= 820) {
-      const t = Math.max(0, Math.min(1, wx / 960));
-      const baseCenterY = 480 + t * 220 + Math.sin(t * Math.PI * 1.6) * 36;
-      const wander = simplex.noise2D(wx * 0.007, 31.4) * 14 + simplex.noise2D(wx * 0.02, 11.2) * 5;
-      const pathCenterY = baseCenterY + wander;
-      const apronBonus = (t > 0.85 ? (t - 0.85) * 70 : 0);
-      const halfWidth = 18 + apronBonus + simplex.noise2D(wx * 0.008, 92.5) * 6;
-      evaluatePathPoint(pathCenterY, wy, halfWidth);
+  /**
+   * Fast spatial lookup for continuous trail network geometry and wear profile.
+   */
+  function getTrailInfo(wx, wy) {
+    const col = Math.floor(wx / TRAIL_BUCKET_SIZE);
+    const row = Math.floor(wy / TRAIL_BUCKET_SIZE);
+    if (col < 0 || col >= TRAIL_BUCKET_COLS || row < 0 || row >= TRAIL_BUCKET_ROWS) {
+      return { intensity: 0, rut: 0, centerRidge: 0, shoulder: 0 };
     }
 
-    // 2. Continental North Highway (from wy: 0 to 720, entering from Sector 2 into Camp Sector 5)
-    if (wy >= 0 && wy <= 740 && wx >= 720 && wx <= 1040) {
-      const t = Math.max(0, Math.min(1, wy / 700));
-      const baseCenterX = 840 + t * 120 + Math.sin(t * Math.PI * 1.5) * 28;
-      const wander = simplex.noise2D(wy * 0.007, 71.8) * 12 + simplex.noise2D(wy * 0.02, 43.1) * 4;
-      const pathCenterX = baseCenterX + wander;
-      const apronBonus = (t > 0.85 ? (t - 0.85) * 60 : 0);
-      const halfWidth = 16 + apronBonus + simplex.noise2D(wy * 0.008, 14.2) * 5;
-      evaluatePathPoint(pathCenterX, wx, halfWidth);
+    const list = trailBuckets[row * TRAIL_BUCKET_COLS + col];
+    if (!list || list.length === 0) {
+      return { intensity: 0, rut: 0, centerRidge: 0, shoulder: 0 };
     }
 
-    // 3. Pier Causeway (from Camp Hub wx: 940 to 1240, heading east-southeast to Dock in Sector 6)
-    if (wx >= 940 && wx <= 1260 && wy >= 660 && wy <= 840) {
-      const t = Math.max(0, Math.min(1, (wx - 960) / 260));
-      const baseCenterY = 700 + t * 80 + Math.sin(t * Math.PI) * 12;
-      const wander = simplex.noise2D(wx * 0.012, 19.4) * 6;
-      const pathCenterY = baseCenterY + wander;
-      const halfWidth = 15 + (t > 0.85 ? 12 : 0);
-      evaluatePathPoint(pathCenterY, wy, halfWidth);
+    let bestNorm = 1e9;
+    for (let i = 0; i < list.length; i++) {
+      const seg = list[i];
+      const vx = wx - seg.x1, vy = wy - seg.y1;
+      const proj = Math.max(0, Math.min(seg.len, vx * seg.dx + vy * seg.dy));
+      const cx = seg.x1 + seg.dx * proj;
+      const cy = seg.y1 + seg.dy * proj;
+      const d  = Math.hypot(wx - cx, wy - cy);
+      const n  = d / seg.halfWidth;
+      if (n < bestNorm) bestNorm = n;
     }
 
-    // 4. Beach Campfire Spur (from Camp Hub wy: 700 to 860, heading south towards the campfire)
-    if (wy >= 700 && wy <= 870 && wx >= 980 && wx <= 1100) {
-      const t = Math.max(0, Math.min(1, (wy - 700) / 150));
-      const baseCenterX = 980 + t * 60 + Math.sin(t * Math.PI) * 8;
-      const wander = simplex.noise2D(wy * 0.015, 88.2) * 4;
-      const pathCenterX = baseCenterX + wander;
-      const halfWidth = 13 + (t > 0.80 ? 10 : 0);
-      evaluatePathPoint(pathCenterX, wx, halfWidth);
+    // bestNorm = 0 at trail center, 1 at edge, >1 outside
+    if (bestNorm >= 1.35) {
+      return { intensity: 0, rut: 0, centerRidge: 0, shoulder: 0 };
     }
 
-    return {
-      intensity: bestIntensity,
-      rut: bestRut,
-      centerRidge: bestCenterRidge,
-      shoulder: bestShoulder
-    };
+    const u = Math.min(1.0, bestNorm);
+    const intensity   = Math.max(0, 1.0 - u);
+    const rut         = Math.max(0, 1.0 - Math.abs(u - 0.48) / 0.26);
+    const centerRidge = Math.max(0, 1.0 - u / 0.22);
+    const shoulder    = u > 0.70 ? (u - 0.70) / 0.30 : 0;
+    return { intensity, rut, centerRidge, shoulder };
   }
 
   function getTrailIntensity(wx, wy) {
@@ -1946,6 +2024,26 @@
               r2 = Math.round(mudR * (1 - bankT) + r2 * bankT);
               g2 = Math.round(mudG * (1 - bankT) + g2 * bankT);
               b2 = Math.round(mudB * (1 - bankT) + b2 * bankT);
+            }
+
+            // Compacted dirt road surface on Layer 2 (packed earth, wagon ruts & gravel)
+            const tInfo = getTrailInfo(wx, wy);
+            if (tInfo && tInfo.intensity > 0 && elev >= ELEV_SHALLOW_WATER && (!rInfo || !rInfo.inWater)) {
+              // Compacted dirt road palette: warm buff/dusty amber-brown earth
+              const packR = Math.round(138 + microGrain * 16 - tInfo.rut * 18);
+              const packG = Math.round(108 + microGrain * 14 - tInfo.rut * 16);
+              const packB = Math.round(72  + microGrain * 10 - tInfo.rut * 12);
+
+              // Center ridge is slightly lighter/dustier
+              const dustBonus = Math.round(tInfo.centerRidge * 12);
+              const trR = Math.min(255, packR + dustBonus);
+              const trG = Math.min(255, packG + dustBonus);
+              const trB = Math.min(255, packB + dustBonus);
+
+              const blendT = Math.min(1.0, tInfo.intensity * 1.35);
+              r2 = Math.round(r2 * (1 - blendT) + trR * blendT);
+              g2 = Math.round(g2 * (1 - blendT) + trG * blendT);
+              b2 = Math.round(b2 * (1 - blendT) + trB * blendT);
             }
 
             // Inland topsoil over bedrock fissures: soil settles into a dark damp sediment trough (Question 1)
