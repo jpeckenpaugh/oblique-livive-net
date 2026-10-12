@@ -1,0 +1,2095 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Substrate Terrain Stack POC (5-Layer Architecture)</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>">
+  <style>
+    :root {
+      --bg-dark: #0a0c10;
+      --panel-bg: #13171f;
+      --panel-card: #1a202c;
+      --panel-border: #2d3748;
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --code-bg: #090d16;
+      --layer-l1: #64748b;
+      --layer-l2: #22c55e;
+      --layer-l3: #eab308;
+      --layer-l4: #06b6d4;
+      --layer-l5: #ec4899;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* Main Viewport Container */
+    #viewport-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 50%, #151a24 0%, #080a0e 100%);
+    }
+
+    #top-bar {
+      height: 52px;
+      background: rgba(19, 23, 31, 0.95);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--panel-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 10;
+    }
+
+    .title-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .title-badge {
+      background: linear-gradient(135deg, #0284c7, #38bdf8);
+      color: #031326;
+      font-weight: 800;
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .title-group h1 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #f8fafc;
+      letter-spacing: -0.2px;
+    }
+
+    .title-group p {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-left: 6px;
+    }
+
+    .hud-stats {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stat-pill {
+      background: #0f131a;
+      border: 1px solid #232a38;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.75rem;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .stat-pill span.label {
+      color: #64748b;
+      font-weight: 500;
+    }
+
+    #canvas-wrapper {
+      flex: 1;
+      position: relative;
+      overflow: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      cursor: grab;
+    }
+
+    #canvas-wrapper:active {
+      cursor: grabbing;
+    }
+
+    canvas#worldCanvas {
+      background-color: #090c12;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px #222938;
+      border-radius: 6px;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      transition: transform 0.1s ease-out;
+      transform-origin: center center;
+    }
+
+    /* Floating Viewport Overlay Toolbar */
+    .viewport-toolbar {
+      position: absolute;
+      bottom: 20px;
+      left: 24px;
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(10px);
+      border: 1px solid #334155;
+      padding: 6px 10px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      z-index: 10;
+    }
+
+    .viewport-toolbar button {
+      background: #1e293b;
+      border: 1px solid #475569;
+      color: #e2e8f0;
+      padding: 4px 10px;
+      border-radius: 5px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .viewport-toolbar button:hover {
+      background: #334155;
+      color: #fff;
+    }
+
+    .viewport-toolbar button.active {
+      background: var(--accent);
+      color: #031326;
+      border-color: var(--accent);
+    }
+
+    /* Sidebar Inspector */
+    #sidebar {
+      width: 380px;
+      background: var(--panel-bg);
+      border-left: 1px solid var(--panel-border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      z-index: 20;
+    }
+
+    .sidebar-section {
+      padding: 16px 18px;
+      border-bottom: 1px solid #1f2735;
+    }
+
+    .sidebar-section:last-child {
+      border-bottom: none;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Layer Items Matrix */
+    .layer-card {
+      background: var(--panel-card);
+      border: 1px solid #283344;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      overflow: hidden;
+      transition: border-color 0.15s, background-color 0.15s;
+    }
+
+    .layer-card.disabled {
+      opacity: 0.45;
+      border-color: #1e2530;
+      background: #11151c;
+    }
+
+    .layer-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+    }
+
+    .layer-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      flex: 1;
+    }
+
+    .layer-color-tag {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    .layer-title-text {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    .layer-subtext {
+      font-size: 0.68rem;
+      color: #64748b;
+      margin-top: 1px;
+    }
+
+    .layer-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-solo {
+      background: #202838;
+      border: 1px solid #37445a;
+      color: #94a3b8;
+      font-size: 0.68rem;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      transition: all 0.12s ease;
+    }
+
+    .btn-solo:hover {
+      background: #2e3b52;
+      color: #f8fafc;
+      border-color: #4b5e7d;
+    }
+
+    .btn-solo.active {
+      background: #f59e0b;
+      color: #1c1917;
+      border-color: #f59e0b;
+      font-weight: 700;
+    }
+
+    .checkbox-toggle {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    /* Preset Buttons Grid */
+    .preset-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .btn-preset {
+      background: #1a2230;
+      border: 1px solid #2d3b50;
+      color: #cbd5e1;
+      padding: 6px 8px;
+      border-radius: 5px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+    }
+
+    .btn-preset:hover {
+      background: #253347;
+      color: #fff;
+      border-color: #3b82f6;
+    }
+
+    /* Sliders & Controls */
+    .control-group {
+      margin-bottom: 12px;
+    }
+
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .control-label {
+      font-size: 0.74rem;
+      font-weight: 500;
+      color: #cbd5e1;
+    }
+
+    .control-val {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .slider-input {
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: #222b3a;
+      accent-color: var(--accent);
+      cursor: pointer;
+      outline: none;
+    }
+
+    .segmented-btn-group {
+      display: flex;
+      background: #0f141d;
+      padding: 2px;
+      border-radius: 6px;
+      border: 1px solid #252d3d;
+      margin-top: 4px;
+    }
+
+    .seg-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 5px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+
+    .seg-btn.active {
+      background: #1e293b;
+      color: #38bdf8;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Substrate Pixel Inspector HUD */
+    .inspector-box {
+      background: #0a0d14;
+      border: 1px solid #1f2738;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.72rem;
+      line-height: 1.5;
+    }
+
+    .inspector-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      padding-bottom: 3px;
+      border-bottom: 1px dashed #171e2c;
+    }
+
+    .inspector-row:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+
+    .insp-label {
+      color: #64748b;
+    }
+
+    .insp-val {
+      color: #e2e8f0;
+      font-weight: 600;
+    }
+
+    .key-badge {
+      display: inline-block;
+      background: #1e293b;
+      border: 1px solid #475569;
+      color: #38bdf8;
+      font-family: monospace;
+      font-size: 0.7rem;
+      padding: 1px 5px;
+      border-radius: 3px;
+      margin: 0 2px;
+    }
+
+    /* Toast Notification */
+    #toast {
+      position: absolute;
+      top: 64px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid #38bdf8;
+      color: #f8fafc;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.25s, transform 0.25s;
+      z-index: 100;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(4px);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Main Viewport Area -->
+  <div id="viewport-container">
+    <div id="top-bar">
+      <div class="title-group">
+        <span class="title-badge">POC Sandbox</span>
+        <h1>Substrate Terrain Stack</h1>
+        <p>Continuous 5-Layer Compositing • Offscreen Static Cache • Dynamic Flow & Foam</p>
+      </div>
+      <div class="hud-stats">
+        <div class="stat-pill"><span class="label">FPS</span> <span id="stat-fps">60</span></div>
+        <div class="stat-pill"><span class="label">Player</span> <span id="stat-player-pos">(10, 8)</span></div>
+        <div class="stat-pill"><span class="label">Substrate</span> <span id="stat-player-substr">Grass</span></div>
+      </div>
+    </div>
+
+    <div id="canvas-wrapper">
+      <canvas id="worldCanvas" width="1920" height="1536"></canvas>
+
+      <!-- Viewport Floating Controls -->
+      <div class="viewport-toolbar">
+        <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 600; margin-right: 4px;">ZOOM</span>
+        <button id="btn-zoom-fit">Fit</button>
+        <button id="btn-zoom-1x" class="active">1x</button>
+        <button id="btn-zoom-15x">1.5x</button>
+        <button id="btn-center-player">Center Player</button>
+        <span style="width: 1px; height: 16px; background: #334155; margin: 0 4px;"></span>
+        <label style="display: flex; align-items: center; gap: 4px; font-size: 0.72rem; cursor: pointer; color: #cbd5e1;">
+          <input type="checkbox" id="chk-grid" style="accent-color: var(--accent);"> Show 64px Grid
+        </label>
+      </div>
+
+      <div id="toast">Substrate re-baked successfully</div>
+    </div>
+  </div>
+
+  <!-- Sidebar: Interactive Layer Inspector -->
+  <div id="sidebar">
+
+    <!-- Section 1: 5-Layer Stack Matrix -->
+    <div class="sidebar-section">
+      <div class="section-header">
+        <div class="section-title">Substrate Layers (Bottom-to-Top)</div>
+        <button id="btn-rebake-all" class="btn-solo" style="color: var(--accent); border-color: var(--accent); padding: 3px 8px;">Re-Bake</button>
+      </div>
+
+      <!-- Layer 5 -->
+      <div class="layer-card" id="card-l5">
+        <div class="layer-card-header">
+          <label class="layer-info" for="chk-l5">
+            <span class="layer-color-tag" style="background: var(--layer-l5);"></span>
+            <div>
+              <div class="layer-title-text">[L5] Entities & 2.5D Props</div>
+              <div class="layer-subtext">Dynamic Y-sorting, cottages, trees, dock, foot wash</div>
+            </div>
+          </label>
+          <div class="layer-actions">
+            <button class="btn-solo" data-layer="l5">Solo</button>
+            <input type="checkbox" class="checkbox-toggle" id="chk-l5" checked>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 4 -->
+      <div class="layer-card" id="card-l4">
+        <div class="layer-card-header">
+          <label class="layer-info" for="chk-l4">
+            <span class="layer-color-tag" style="background: var(--layer-l4);"></span>
+            <div>
+              <div class="layer-title-text">[L4] Flowing Water & Surf Foam</div>
+              <div class="layer-subtext">Translucent coastal water, UV wave drift, shoreline foam</div>
+            </div>
+          </label>
+          <div class="layer-actions">
+            <button class="btn-solo" data-layer="l4">Solo</button>
+            <input type="checkbox" class="checkbox-toggle" id="chk-l4" checked>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 3 -->
+      <div class="layer-card" id="card-l3">
+        <div class="layer-card-header">
+          <label class="layer-info" for="chk-l3">
+            <span class="layer-color-tag" style="background: var(--layer-l3);"></span>
+            <div>
+              <div class="layer-title-text">[L3] Topsoil, Trails & Sand</div>
+              <div class="layer-subtext">Sand encircles grass and slopes <em>under</em> shallow water</div>
+            </div>
+          </label>
+          <div class="layer-actions">
+            <button class="btn-solo" data-layer="l3">Solo</button>
+            <input type="checkbox" class="checkbox-toggle" id="chk-l3" checked>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 2 -->
+      <div class="layer-card" id="card-l2">
+        <div class="layer-card-header">
+          <label class="layer-info" for="chk-l2">
+            <span class="layer-color-tag" style="background: var(--layer-l2);"></span>
+            <div>
+              <div class="layer-title-text">[L2] Biome / Grass Field</div>
+              <div class="layer-subtext">Continuous Simplex FBM noise, organic alpha feathering</div>
+            </div>
+          </label>
+          <div class="layer-actions">
+            <button class="btn-solo" data-layer="l2">Solo</button>
+            <input type="checkbox" class="checkbox-toggle" id="chk-l2" checked>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 1 -->
+      <div class="layer-card" id="card-l1">
+        <div class="layer-card-header">
+          <label class="layer-info" for="chk-l1">
+            <span class="layer-color-tag" style="background: var(--layer-l1);"></span>
+            <div>
+              <div class="layer-title-text">[L1] Bedrock / Abyss Base</div>
+              <div class="layer-subtext">100% opaque universal floor (basalt rock & silt)</div>
+            </div>
+          </label>
+          <div class="layer-actions">
+            <button class="btn-solo" data-layer="l1">Solo</button>
+            <input type="checkbox" class="checkbox-toggle" id="chk-l1" checked>
+          </div>
+        </div>
+      </div>
+
+      <!-- Master Presets -->
+      <div class="preset-grid">
+        <button class="btn-preset" id="preset-all">All 5 Layers On</button>
+        <button class="btn-preset" id="preset-substr-only">Substrate Only (No Props)</button>
+        <button class="btn-preset" id="preset-xray-water">X-Ray Water (Inspect Sand)</button>
+        <button class="btn-preset" id="preset-bedrock-only">Bedrock Floor Only</button>
+      </div>
+    </div>
+
+    <!-- Section 2: Water & Foam Simulation Sliders -->
+    <div class="sidebar-section">
+      <div class="section-title" style="margin-bottom: 10px;">Water & Foam Simulation</div>
+
+      <div class="control-group">
+        <div class="control-label-row">
+          <span class="control-label">Shallow Water Opacity</span>
+          <span class="control-val" id="val-shallow-alpha">0.45</span>
+        </div>
+        <input type="range" class="slider-input" id="rng-shallow-alpha" min="0.10" max="0.80" step="0.05" value="0.45">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label-row">
+          <span class="control-label">Deep Ocean Opacity</span>
+          <span class="control-val" id="val-deep-alpha">0.90</span>
+        </div>
+        <input type="range" class="slider-input" id="rng-deep-alpha" min="0.50" max="1.00" step="0.05" value="0.90">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label-row">
+          <span class="control-label">Foam Breath Speed</span>
+          <span class="control-val" id="val-foam-speed">1.50x</span>
+        </div>
+        <input type="range" class="slider-input" id="rng-foam-speed" min="0.5" max="3.5" step="0.25" value="1.5">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label-row">
+          <span class="control-label">Foam Wave Amplitude</span>
+          <span class="control-val" id="val-foam-amp">14 px</span>
+        </div>
+        <input type="range" class="slider-input" id="rng-foam-amp" min="4" max="28" step="2" value="14">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label-row">
+          <span class="control-label">Water Flow UV Speed</span>
+          <span class="control-val" id="val-water-speed">1.00x</span>
+        </div>
+        <input type="range" class="slider-input" id="rng-water-speed" min="0.2" max="3.0" step="0.2" value="1.0">
+      </div>
+
+      <div class="control-group" style="margin-top: 10px;">
+        <span class="control-label">Shoreline Foam Aesthetic</span>
+        <div class="segmented-btn-group">
+          <button class="seg-btn active" id="btn-foam-pixel">Stylized Retro Pixel</button>
+          <button class="seg-btn" id="btn-foam-smooth">Smooth Organic Liquid</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Procedural Noise Generation -->
+    <div class="sidebar-section">
+      <div class="section-title" style="margin-bottom: 10px;">Procedural Noise Tuning</div>
+
+      <div class="control-group">
+        <div class="control-label-row">
+          <span class="control-label">Landmass Noise Frequency</span>
+          <span class="control-val" id="val-noise-freq">0.0042</span>
+        </div>
+        <input type="range" class="slider-input" id="rng-noise-freq" min="0.0020" max="0.0090" step="0.0005" value="0.0042">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label-row">
+          <span class="control-label">Island Radius Falloff</span>
+          <span class="control-val" id="val-island-rad">920 px</span>
+        </div>
+        <input type="range" class="slider-input" id="rng-island-rad" min="600" max="1300" step="50" value="920">
+      </div>
+
+      <button id="btn-random-seed" class="btn-preset" style="width: 100%; margin-top: 10px; padding: 7px;">🎲 Generate New Island Seed</button>
+    </div>
+
+    <!-- Section 4: Live Substrate Pixel Inspector -->
+    <div class="sidebar-section">
+      <div class="section-title" style="margin-bottom: 8px;">Substrate Coordinate Inspector</div>
+      <div class="inspector-box">
+        <div class="inspector-row">
+          <span class="insp-label">Cursor World Pos</span>
+          <span class="insp-val" id="insp-pos">X: 640, Y: 512</span>
+        </div>
+        <div class="inspector-row">
+          <span class="insp-label">Elevation / Depth</span>
+          <span class="insp-val" id="insp-elev">0.68 (Inland)</span>
+        </div>
+        <div class="inspector-row">
+          <span class="insp-label">[L1] Bedrock</span>
+          <span class="insp-val" style="color: var(--layer-l1);" id="insp-l1">Opaque Basalt</span>
+        </div>
+        <div class="inspector-row">
+          <span class="insp-label">[L2] Biome Grass</span>
+          <span class="insp-val" style="color: var(--layer-l2);" id="insp-l2">Active (Alpha 1.0)</span>
+        </div>
+        <div class="inspector-row">
+          <span class="insp-label">[L3] Topsoil / Sand</span>
+          <span class="insp-val" style="color: var(--layer-l3);" id="insp-l3">Dirt Path</span>
+        </div>
+        <div class="inspector-row">
+          <span class="insp-label">[L4] Flowing Water</span>
+          <span class="insp-val" style="color: var(--layer-l4);" id="insp-l4">Dry (Land)</span>
+        </div>
+        <div class="inspector-row">
+          <span class="insp-label">[L5] Entity Occlusion</span>
+          <span class="insp-val" style="color: var(--layer-l5);" id="insp-l5">None</span>
+        </div>
+      </div>
+
+      <div style="margin-top: 10px; font-size: 0.72rem; color: #64748b; line-height: 1.4;">
+        Walk with <span class="key-badge">W</span> <span class="key-badge">A</span> <span class="key-badge">S</span> <span class="key-badge">D</span> into the shallow water to test <strong>submerged foot wash</strong> and notice sand extending seamlessly beneath the translucent water!
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+  /**
+   * =========================================================================
+   * SUBSTRATE TERRAIN STACK PROOF-OF-CONCEPT (5-Layer Architecture)
+   * Standalone Zero-Dependency Implementation
+   * =========================================================================
+   */
+
+  // --- Constants & World Configuration ---
+  const TILE_SIZE = 64;
+  const GRID_COLS = 30;
+  const GRID_ROWS = 24;
+  const WORLD_WIDTH = GRID_COLS * TILE_SIZE;   // 1920
+  const WORLD_HEIGHT = GRID_ROWS * TILE_SIZE; // 1536
+
+  // Substrate Elevation Thresholds
+  const ELEV_DEEP_WATER = 0.28;
+  const ELEV_SHALLOW_WATER = 0.44;
+  const ELEV_SAND_EXTENT = 0.52; // Sand extends beneath shallow water (down to 0.28) and onto dry beach
+  const ELEV_GRASS_MIN = 0.46;   // Grass begins feathering in over sand
+
+  // --- State Configuration ---
+  const config = {
+    // Layer Visibility
+    layers: {
+      l1: true, // Bedrock / Abyss Base
+      l2: true, // Biome / Grass Field
+      l3: true, // Topsoil, Paths & Sand
+      l4: true, // Flowing Water & Surf Foam
+      l5: true  // Entities & 2.5D Props
+    },
+    // Water & Foam Simulation
+    water: {
+      shallowAlpha: 0.45,
+      deepAlpha: 0.90,
+      foamSpeed: 1.5,
+      foamAmp: 14,
+      waterSpeed: 1.0,
+      foamAesthetic: 'pixel' // 'pixel' or 'smooth'
+    },
+    // Noise Generation
+    noise: {
+      freq: 0.0042,
+      islandRadius: 920,
+      seed: 42
+    },
+    // Debug & Camera
+    debug: {
+      showGrid: false
+    },
+    camera: {
+      zoom: 1.0,
+      panX: 0,
+      panY: 0
+    }
+  };
+
+  // Solo tracking state
+  let currentSoloLayer = null;
+
+  // --- 2D Simplex Noise Implementation (Self-Contained) ---
+  class SimplexNoise {
+    constructor(seed = 42) {
+      this.p = new Uint8Array(256);
+      this.perm = new Uint8Array(512);
+      this.permMod12 = new Uint8Array(512);
+      this.init(seed);
+    }
+
+    init(seed) {
+      // Linear congruential generator for seeded random permutation
+      let s = seed % 2147483647;
+      if (s <= 0) s += 2147483646;
+      function next() {
+        return (s = (s * 16807) % 2147483647) / 2147483647;
+      }
+
+      for (let i = 0; i < 256; i++) {
+        this.p[i] = i;
+      }
+      for (let i = 255; i > 0; i--) {
+        const j = Math.floor(next() * (i + 1));
+        const temp = this.p[i];
+        this.p[i] = this.p[j];
+        this.p[j] = temp;
+      }
+      for (let i = 0; i < 512; i++) {
+        this.perm[i] = this.p[i & 255];
+        this.permMod12[i] = this.perm[i] % 12;
+      }
+    }
+
+    noise2D(xin, yin) {
+      const grad3 = [
+        [1, 1], [-1, 1], [1, -1], [-1, -1],
+        [1, 0], [-1, 0], [1, 0], [-1, 0],
+        [0, 1], [0, -1], [0, 1], [0, -1]
+      ];
+
+      const F2 = 0.5 * (Math.sqrt(3.0) - 1.0);
+      const G2 = (3.0 - Math.sqrt(3.0)) / 6.0;
+
+      let n0 = 0, n1 = 0, n2 = 0;
+      const s = (xin + yin) * F2;
+      const i = Math.floor(xin + s);
+      const j = Math.floor(yin + s);
+      const t = (i + j) * G2;
+      const X0 = i - t;
+      const Y0 = j - t;
+      const x0 = xin - X0;
+      const y0 = yin - Y0;
+
+      let i1, j1;
+      if (x0 > y0) { i1 = 1; j1 = 0; }
+      else { i1 = 0; j1 = 1; }
+
+      const x1 = x0 - i1 + G2;
+      const y1 = y0 - j1 + G2;
+      const x2 = x0 - 1.0 + 2.0 * G2;
+      const y2 = y0 - 1.0 + 2.0 * G2;
+
+      const ii = i & 255;
+      const jj = j & 255;
+      const gi0 = this.permMod12[ii + this.perm[jj]];
+      const gi1 = this.permMod12[ii + i1 + this.perm[jj + j1]];
+      const gi2 = this.permMod12[ii + 1 + this.perm[jj + 1]];
+
+      let t0 = 0.5 - x0 * x0 - y0 * y0;
+      if (t0 >= 0) {
+        t0 *= t0;
+        n0 = t0 * t0 * (grad3[gi0][0] * x0 + grad3[gi0][1] * y0);
+      }
+
+      let t1 = 0.5 - x1 * x1 - y1 * y1;
+      if (t1 >= 0) {
+        t1 *= t1;
+        n1 = t1 * t1 * (grad3[gi1][0] * x1 + grad3[gi1][1] * y1);
+      }
+
+      let t2 = 0.5 - x2 * x2 - y2 * y2;
+      if (t2 >= 0) {
+        t2 *= t2;
+        n2 = t2 * t2 * (grad3[gi2][0] * x2 + grad3[gi2][1] * y2);
+      }
+
+      // Return scaled result in range [-1, 1]
+      return 70.0 * (n0 + n1 + n2);
+    }
+
+    fbm(x, y, octaves = 4, persistence = 0.5, lacunarity = 2.0) {
+      let total = 0;
+      let frequency = 1;
+      let amplitude = 1;
+      let maxValue = 0;
+      for (let i = 0; i < octaves; i++) {
+        total += this.noise2D(x * frequency, y * frequency) * amplitude;
+        maxValue += amplitude;
+        amplitude *= persistence;
+        frequency *= lacunarity;
+      }
+      return total / maxValue; // Normalized [-1, 1]
+    }
+  }
+
+  let simplex = new SimplexNoise(config.noise.seed);
+
+  /**
+   * Evaluates procedural elevation at world pixel coordinate (wx, wy).
+   * Returns a value typically between [0.0, 1.0].
+   */
+  function getElevation(wx, wy) {
+    const islandCenterX = 760;
+    const islandCenterY = 740;
+    const dx = wx - islandCenterX;
+    const dy = wy - islandCenterY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    // Radial gradient falloff towards deep ocean at edges
+    const maxRadius = config.noise.islandRadius;
+    const radialWeight = 1.0 - Math.min(1.0, dist / maxRadius);
+
+    // Multi-octave FBM organic contour
+    const nx = wx * config.noise.freq;
+    const ny = wy * config.noise.freq;
+    const noiseVal = (simplex.fbm(nx, ny, 4, 0.5, 2.0) + 1.0) * 0.5; // [0, 1]
+
+    // Micro details
+    const micro = (simplex.noise2D(wx * 0.015, wy * 0.015) + 1.0) * 0.5;
+
+    // Blend: organic island mask
+    let elev = (radialWeight * 0.65) + (noiseVal * 0.32) + (micro * 0.03);
+
+    // Flatten ocean basin on far east side (leaving a deep lagoon/bay)
+    if (wx > 1300) {
+      const eastDrop = (wx - 1300) / 620;
+      elev -= eastDrop * 0.35;
+    }
+
+    return Math.max(0.0, Math.min(1.0, elev));
+  }
+
+  /**
+   * Evaluates winding dirt trail network mask.
+   * Returns 0.0 to 1.0 trail intensity.
+   */
+  function getTrailIntensity(wx, wy) {
+    // Primary path: from cottage (480, 480) heading east-southeast toward pier (1216, 800)
+    // Bezier-like curve approximation
+    const t = Math.max(0, Math.min(1, (wx - 450) / 780));
+    const pathCenterY = 460 + t * 340 + Math.sin(t * Math.PI * 2.2) * 55;
+    const distToPath = Math.abs(wy - pathCenterY);
+
+    if (distToPath < 24 && wx >= 420 && wx <= 1240) {
+      return 1.0 - (distToPath / 24);
+    }
+
+    // Secondary trail branching south toward forest barrels
+    if (wx >= 720 && wx <= 760 && wy >= 520 && wy <= 840) {
+      const distBranch = Math.abs(wx - 740);
+      return 1.0 - (distBranch / 20);
+    }
+
+    return 0.0;
+  }
+
+  // --- Offscreen Cached Canvas Layers (Phase 1: Static Bake) ---
+  const canvasL1 = document.createElement('canvas'); // Bedrock Floor
+  const canvasL2 = document.createElement('canvas'); // Biome Grass Field
+  const canvasL3 = document.createElement('canvas'); // Topsoil & Sand
+
+  canvasL1.width = WORLD_WIDTH; canvasL1.height = WORLD_HEIGHT;
+  canvasL2.width = WORLD_WIDTH; canvasL2.height = WORLD_HEIGHT;
+  canvasL3.width = WORLD_WIDTH; canvasL3.height = WORLD_HEIGHT;
+
+  const ctxL1 = canvasL1.getContext('2d');
+  const ctxL2 = canvasL2.getContext('2d');
+  const ctxL3 = canvasL3.getContext('2d');
+
+  /**
+   * Bakes Static Substrate Layers (L1, L2, L3) into offscreen canvases.
+   * Executed once on load or when procedural noise parameters change.
+   */
+  function bakeStaticLayers() {
+    console.time('bakeStaticLayers');
+
+    // -------------------------------------------------------------
+    // [LAYER 1]: BEDROCK / ABYSS BASE (100% Opaque Universal Floor)
+    // -------------------------------------------------------------
+    ctxL1.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    const imgDataL1 = ctxL1.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
+    const dataL1 = imgDataL1.data;
+
+    // -------------------------------------------------------------
+    // [LAYER 2]: BIOME / GRASS FIELD (World-space continuous FBM)
+    // -------------------------------------------------------------
+    ctxL2.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    const imgDataL2 = ctxL2.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
+    const dataL2 = imgDataL2.data;
+
+    // -------------------------------------------------------------
+    // [LAYER 3]: TOPSOIL, PATHS & BEACH SAND (Extends under shallow water)
+    // -------------------------------------------------------------
+    ctxL3.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    const imgDataL3 = ctxL3.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
+    const dataL3 = imgDataL3.data;
+
+    // Step size for rendering speed and crisp retro pixel scale
+    // Using 4x4 sub-sampling block for high quality & sub-second bake time
+    const BLOCK = 4;
+    const cols = WORLD_WIDTH / BLOCK;
+    const rows = WORLD_HEIGHT / BLOCK;
+
+    for (let by = 0; by < rows; by++) {
+      const wy = by * BLOCK;
+      for (let bx = 0; bx < cols; bx++) {
+        const wx = bx * BLOCK;
+
+        const elev = getElevation(wx, wy);
+        const trail = getTrailIntensity(wx, wy);
+
+        // --- 1. Compute Bedrock Base [L1] ---
+        // Deep basalt, oceanic trench rock, wet silt
+        // Subtle organic rock color variations
+        const rockNoise = (simplex.noise2D(wx * 0.02, wy * 0.02) + 1.0) * 0.5;
+        const siltNoise = (simplex.noise2D(wx * 0.008, wy * 0.008) + 1.0) * 0.5;
+
+        let r1 = 16 + Math.round(rockNoise * 14 + siltNoise * 6);
+        let g1 = 22 + Math.round(rockNoise * 16 + siltNoise * 8);
+        let b1 = 34 + Math.round(rockNoise * 22 + siltNoise * 12);
+
+        // Add subtle cracks / fissures in deep bedrock
+        if (rockNoise > 0.78 && elev < ELEV_DEEP_WATER) {
+          r1 -= 8; g1 -= 8; b1 -= 10;
+        }
+
+        // --- 2. Compute Biome Grass Field [L2] ---
+        // Smooth continuous palette ramp based on inland elevation & FBM moisture
+        let grassAlpha = 0;
+        let r2 = 0, g2 = 0, b2 = 0;
+
+        if (elev >= ELEV_GRASS_MIN && trail < 0.65) {
+          // Feather alpha at edges (ELEV_GRASS_MIN to ELEV_GRASS_MIN + 0.06)
+          const featherSpan = 0.06;
+          grassAlpha = Math.min(1.0, (elev - ELEV_GRASS_MIN) / featherSpan);
+
+          // If trail is present, feather grass away from trail
+          if (trail > 0) {
+            grassAlpha *= Math.max(0, 1.0 - (trail * 1.5));
+          }
+
+          // Biome color ramp
+          const moisture = (simplex.fbm(wx * 0.007, wy * 0.007, 3) + 1.0) * 0.5;
+          const meadow = (simplex.noise2D(wx * 0.025, wy * 0.025) + 1.0) * 0.5;
+
+          if (elev > 0.68) {
+            // High inland rich emerald forest
+            r2 = Math.round(24 + meadow * 10);
+            g2 = Math.round(68 + moisture * 25);
+            b2 = Math.round(38 + meadow * 12);
+          } else if (moisture > 0.52) {
+            // Lush green meadow
+            r2 = Math.round(38 + meadow * 14);
+            g2 = Math.round(112 + moisture * 24);
+            b2 = Math.round(52 + meadow * 12);
+          } else {
+            // Sunlit lime coastal grass tufts
+            r2 = Math.round(72 + meadow * 18);
+            g2 = Math.round(152 + meadow * 22);
+            b2 = Math.round(64 + moisture * 16);
+          }
+        }
+
+        // --- 3. Compute Topsoil, Paths & Beach Sand [L3] ---
+        // CRUCIAL REQUIREMENT: Sand extends UNDERNEATH shallow water into Layer 1!
+        let sandAlpha = 0;
+        let r3 = 0, g3 = 0, b3 = 0;
+
+        // Sand encompasses dry beach (0.44 to 0.52) AND submerged sea-bed (0.28 to 0.44)
+        if (elev >= ELEV_DEEP_WATER && elev <= ELEV_SAND_EXTENT + 0.04) {
+          // Sand covers this zone
+          if (elev < ELEV_SHALLOW_WATER) {
+            // SUBMERGED SAND: slopes beneath shallow water
+            // Feather into deep bedrock at ELEV_DEEP_WATER
+            const subFade = Math.min(1.0, (elev - ELEV_DEEP_WATER) / 0.06);
+            sandAlpha = subFade;
+
+            // Submerged sand has a slightly darker, wet golden tone
+            const grain = (simplex.noise2D(wx * 0.04, wy * 0.04) + 1.0) * 0.5;
+            r3 = Math.round(175 + grain * 16);
+            g3 = Math.round(145 + grain * 14);
+            b3 = Math.round(98 + grain * 12);
+          } else {
+            // DRY BEACH SAND: bright golden grains
+            sandAlpha = 1.0;
+            // Fade down slightly as it goes under dense grass inland
+            if (elev > ELEV_SAND_EXTENT) {
+              sandAlpha = Math.max(0, 1.0 - ((elev - ELEV_SAND_EXTENT) / 0.04));
+            }
+            const grain = (simplex.noise2D(wx * 0.04, wy * 0.04) + 1.0) * 0.5;
+            r3 = Math.round(218 + grain * 20);
+            g3 = Math.round(188 + grain * 18);
+            b3 = Math.round(132 + grain * 16);
+          }
+        }
+
+        // Dirt Trails in Layer 3
+        if (trail > 0 && elev > ELEV_SHALLOW_WATER) {
+          sandAlpha = Math.max(sandAlpha, trail);
+          const tFactor = Math.min(1.0, trail * 1.4);
+          // Blend trail dirt (warm brown) over sand
+          const dirtR = 142 + Math.floor(simplex.noise2D(wx * 0.05, wy * 0.05) * 15);
+          const dirtG = 92 + Math.floor(simplex.noise2D(wx * 0.05, wy * 0.05) * 12);
+          const dirtB = 52 + Math.floor(simplex.noise2D(wx * 0.05, wy * 0.05) * 8);
+
+          r3 = Math.round(r3 * (1 - tFactor) + dirtR * tFactor);
+          g3 = Math.round(g3 * (1 - tFactor) + dirtG * tFactor);
+          b3 = Math.round(b3 * (1 - tFactor) + dirtB * tFactor);
+        }
+
+        // Fill Block Pixels
+        for (let py = 0; py < BLOCK; py++) {
+          const cy = wy + py;
+          if (cy >= WORLD_HEIGHT) continue;
+          for (let px = 0; px < BLOCK; px++) {
+            const cx = wx + px;
+            if (cx >= WORLD_WIDTH) continue;
+            const idx = (cy * WORLD_WIDTH + cx) * 4;
+
+            // Layer 1: Always 100% Opaque Bedrock
+            dataL1[idx] = r1;
+            dataL1[idx + 1] = g1;
+            dataL1[idx + 2] = b1;
+            dataL1[idx + 3] = 255;
+
+            // Layer 2: Biome Grass with Alpha Mask
+            dataL2[idx] = r2;
+            dataL2[idx + 1] = g2;
+            dataL2[idx + 2] = b2;
+            dataL2[idx + 3] = Math.round(grassAlpha * 255);
+
+            // Layer 3: Topsoil & Sand with Alpha Mask
+            dataL3[idx] = r3;
+            dataL3[idx + 1] = g3;
+            dataL3[idx + 2] = b3;
+            dataL3[idx + 3] = Math.round(sandAlpha * 255);
+          }
+        }
+      }
+    }
+
+    ctxL1.putImageData(imgDataL1, 0, 0);
+    ctxL2.putImageData(imgDataL2, 0, 0);
+    ctxL3.putImageData(imgDataL3, 0, 0);
+
+    console.timeEnd('bakeStaticLayers');
+    showToast('Substrate static cache re-baked (L1, L2, L3)!');
+  }
+
+  // --- Dynamic Assets & Entities Showcase (Layer 5) ---
+  const assets = {};
+  const assetPaths = {
+    'house': 'fishers-house-turntable-palette.webp',
+    'barrel': 'wooden-barrel-turntable-palette.webp',
+    'dock': 'wooden-dock-turntable-palette.webp',
+    'palm': 'tropical-palm-tree-turntable-palette.webp',
+    'rock': 'rock-pile-turntable-palette.webp',
+    'piranha': 'piranha-turntable-palette.webp',
+    'player': 'rukiya-walking-walking-animation-palette.webp'
+  };
+
+  // Preload project assets
+  for (const [key, src] of Object.entries(assetPaths)) {
+    const img = new Image();
+    img.src = src;
+    img.onload = () => { assets[key] = img; };
+    img.onerror = () => {
+      // Graceful fallback: assets will render procedural 2.5D graphics if web server not running
+      assets[key] = null;
+    };
+  }
+
+  // Showcase Entity Catalog
+  const entities = [
+    // Fisherman's Cottage on grassy plateau
+    {
+      id: 'house',
+      asset: 'house',
+      x: 480,
+      y: 460,
+      renderWidth: 256,
+      renderHeight: 256,
+      anchorX: 128,
+      anchorY: 220,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    // Barrels along the trail
+    {
+      id: 'barrel-1',
+      asset: 'barrel',
+      x: 360,
+      y: 470,
+      renderWidth: 64,
+      renderHeight: 64,
+      anchorX: 32,
+      anchorY: 60,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    {
+      id: 'barrel-2',
+      asset: 'barrel',
+      x: 680,
+      y: 530,
+      renderWidth: 64,
+      renderHeight: 64,
+      anchorX: 32,
+      anchorY: 60,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    {
+      id: 'barrel-3',
+      asset: 'barrel',
+      x: 1040,
+      y: 740,
+      renderWidth: 64,
+      renderHeight: 64,
+      anchorX: 32,
+      anchorY: 60,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    // Palm trees on sandy beach
+    {
+      id: 'palm-1',
+      asset: 'palm',
+      x: 1120,
+      y: 420,
+      renderWidth: 140,
+      renderHeight: 180,
+      anchorX: 70,
+      anchorY: 175,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    {
+      id: 'palm-2',
+      asset: 'palm',
+      x: 1180,
+      y: 620,
+      renderWidth: 140,
+      renderHeight: 180,
+      anchorX: 70,
+      anchorY: 175,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    {
+      id: 'palm-3',
+      asset: 'palm',
+      x: 1060,
+      y: 980,
+      renderWidth: 140,
+      renderHeight: 180,
+      anchorX: 70,
+      anchorY: 175,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    // Rock Piles
+    {
+      id: 'rock-1',
+      asset: 'rock',
+      x: 880,
+      y: 360,
+      renderWidth: 96,
+      renderHeight: 80,
+      anchorX: 48,
+      anchorY: 72,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    {
+      id: 'rock-2',
+      asset: 'rock',
+      x: 1320,
+      y: 520,
+      renderWidth: 96,
+      renderHeight: 80,
+      anchorX: 48,
+      anchorY: 72,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    // Wooden Pier / Dock: Extending from sand out into the flowing water!
+    {
+      id: 'dock',
+      asset: 'dock',
+      x: 1220,
+      y: 780,
+      renderWidth: 160,
+      renderHeight: 120,
+      anchorX: 80,
+      anchorY: 80,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    // Swimming Piranhas in deep water
+    {
+      id: 'piranha-1',
+      asset: 'piranha',
+      x: 1460,
+      y: 780,
+      renderWidth: 64,
+      renderHeight: 64,
+      anchorX: 32,
+      anchorY: 32,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0,
+      isSwimmer: true,
+      phase: 0
+    },
+    {
+      id: 'piranha-2',
+      asset: 'piranha',
+      x: 1540,
+      y: 860,
+      renderWidth: 64,
+      renderHeight: 64,
+      anchorX: 32,
+      anchorY: 32,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0,
+      isSwimmer: true,
+      phase: 1.8
+    }
+  ];
+
+  // Playable Character State (Rukiya)
+  const player = {
+    x: 640,
+    y: 490,
+    speed: 180, // px per sec
+    dir: 0,     // 0: down, 1: right, 2: up, 3: left
+    walking: false,
+    animTime: 0,
+    renderWidth: 96,
+    renderHeight: 96,
+    anchorX: 48,
+    anchorY: 90,
+    frameWidth: 128,
+    frameHeight: 128
+  };
+
+  // Keyboard controls
+  const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
+  window.addEventListener('keydown', (e) => {
+    if (keys.hasOwnProperty(e.key)) {
+      keys[e.key] = true;
+      e.preventDefault();
+    }
+  });
+  window.addEventListener('keyup', (e) => {
+    if (keys.hasOwnProperty(e.key)) {
+      keys[e.key] = false;
+      e.preventDefault();
+    }
+  });
+
+  /**
+   * Update character movement and animation
+   */
+  function updatePlayer(dt) {
+    let dx = 0;
+    let dy = 0;
+
+    if (keys.w || keys.ArrowUp) { dy -= 1; player.dir = 2; }
+    if (keys.s || keys.ArrowDown) { dy += 1; player.dir = 0; }
+    if (keys.a || keys.ArrowLeft) { dx -= 1; player.dir = 3; }
+    if (keys.d || keys.ArrowRight) { dx += 1; player.dir = 1; }
+
+    if (dx !== 0 && dy !== 0) {
+      dx *= 0.7071;
+      dy *= 0.7071;
+    }
+
+    if (dx !== 0 || dy !== 0) {
+      player.x += dx * player.speed * dt;
+      player.y += dy * player.speed * dt;
+      player.walking = true;
+      player.animTime += dt;
+
+      // Clamp to world
+      player.x = Math.max(64, Math.min(WORLD_WIDTH - 64, player.x));
+      player.y = Math.max(64, Math.min(WORLD_HEIGHT - 64, player.y));
+    } else {
+      player.walking = false;
+      player.animTime = 0;
+    }
+
+    // Update HUD Stats
+    const playerTileX = Math.floor(player.x / TILE_SIZE);
+    const playerTileY = Math.floor(player.y / TILE_SIZE);
+    document.getElementById('stat-player-pos').innerText = `(${playerTileX}, ${playerTileY})`;
+
+    const curElev = getElevation(player.x, player.y);
+    let substrateName = 'Grass Biome';
+    if (curElev < ELEV_DEEP_WATER) substrateName = 'Deep Ocean 🌊';
+    else if (curElev < ELEV_SHALLOW_WATER) substrateName = 'Shallow Water 💦';
+    else if (curElev < ELEV_SAND_EXTENT) substrateName = 'Beach Sand 🏖️';
+    document.getElementById('stat-player-substr').innerText = substrateName;
+  }
+
+  // --- Main Canvas 2D Setup & Rendering Loop ---
+  const canvas = document.getElementById('worldCanvas');
+  const ctx = canvas.getContext('2d');
+
+  let lastTime = performance.now();
+  let frameCount = 0;
+  let fpsTimer = 0;
+
+  /**
+   * Main Render Frame
+   */
+  function renderFrame(now) {
+    const dt = Math.min(0.1, (now - lastTime) / 1000);
+    lastTime = now;
+
+    // FPS Meter
+    frameCount++;
+    fpsTimer += dt;
+    if (fpsTimer >= 0.5) {
+      const fps = Math.round(frameCount / fpsTimer);
+      document.getElementById('stat-fps').innerText = fps;
+      frameCount = 0;
+      fpsTimer = 0;
+    }
+
+    // Update simulations
+    updatePlayer(dt);
+
+    const timeSec = now * 0.001;
+
+    // Clear main frame
+    ctx.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+
+    // -------------------------------------------------------------
+    // PASS 1: COMPOSITE STATIC SUBSTRATE (Layers 1 to 3)
+    // -------------------------------------------------------------
+    if (config.layers.l1) {
+      ctx.drawImage(canvasL1, 0, 0);
+    }
+
+    if (config.layers.l2) {
+      ctx.drawImage(canvasL2, 0, 0);
+    }
+
+    if (config.layers.l3) {
+      ctx.drawImage(canvasL3, 0, 0);
+    }
+
+    // -------------------------------------------------------------
+    // PASS 2: DYNAMIC FLOWING WATER & SURF FOAM (Layer 4)
+    // -------------------------------------------------------------
+    if (config.layers.l4) {
+      renderWaterLayer(ctx, timeSec);
+    }
+
+    // Optional Grid Overlay
+    if (config.debug.showGrid) {
+      renderGridOverlay(ctx);
+    }
+
+    // -------------------------------------------------------------
+    // PASS 3: Y-SORTED ENTITIES & PROPS (Layer 5)
+    // -------------------------------------------------------------
+    if (config.layers.l5) {
+      renderEntitiesLayer(ctx, timeSec);
+    }
+
+    requestAnimationFrame(renderFrame);
+  }
+
+  /**
+   * Render Layer 4: Flowing Water & Breathing Surf Foam
+   */
+  function renderWaterLayer(targetCtx, timeSec) {
+    const shallowAlpha = config.water.shallowAlpha;
+    const deepAlpha = config.water.deepAlpha;
+    const foamSpeed = config.water.foamSpeed;
+    const foamAmp = config.water.foamAmp;
+    const waterSpeed = config.water.waterSpeed;
+    const isPixelFoam = config.water.foamAesthetic === 'pixel';
+
+    // Sampling block for real-time dynamic water pass (32px chunk grid for fast math)
+    const CHUNK = 32;
+    const cols = WORLD_WIDTH / CHUNK;
+    const rows = WORLD_HEIGHT / CHUNK;
+
+    targetCtx.save();
+
+    for (let cy = 0; cy < rows; cy++) {
+      const wy = cy * CHUNK;
+      for (let cx = 0; cx < cols; cx++) {
+        const wx = cx * CHUNK;
+        const elev = getElevation(wx, wy);
+
+        // Water only covers areas where elevation < ELEV_SHALLOW_WATER
+        if (elev >= ELEV_SHALLOW_WATER) continue;
+
+        // Dynamic depth blend:
+        // elev < ELEV_DEEP_WATER: Deep ocean
+        // ELEV_DEEP_WATER <= elev < ELEV_SHALLOW_WATER: Shallow coastal water
+        let waterColor, alpha;
+        if (elev < ELEV_DEEP_WATER) {
+          // Deep Abyss: High opacity, deep navy/indigo
+          alpha = deepAlpha;
+          waterColor = 'rgba(15, 30, 66, ' + alpha + ')';
+        } else {
+          // Shallow Coast: Medium opacity (shows Layer 3 sand beneath!)
+          const depthRatio = (elev - ELEV_DEEP_WATER) / (ELEV_SHALLOW_WATER - ELEV_DEEP_WATER); // 0 (deep) to 1 (coast)
+          alpha = deepAlpha * (1 - depthRatio) + shallowAlpha * depthRatio;
+          // Color ramp from rich blue to turquoise/azure
+          const r = Math.round(14 * (1 - depthRatio) + 14 * depthRatio);
+          const g = Math.round(80 * (1 - depthRatio) + 165 * depthRatio);
+          const b = Math.round(180 * (1 - depthRatio) + 233 * depthRatio);
+          waterColor = `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`;
+        }
+
+        targetCtx.fillStyle = waterColor;
+        targetCtx.fillRect(wx, wy, CHUNK, CHUNK);
+
+        // UV Drift Wave Highlights
+        const flowTime = timeSec * waterSpeed * 2.2;
+        const waveX = Math.sin(wy * 0.035 + flowTime + wx * 0.02) * 5;
+        const waveY = Math.cos(wx * 0.035 - flowTime + wy * 0.015) * 4;
+
+        if ((cx + cy) % 2 === 0) {
+          targetCtx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+          targetCtx.fillRect(wx + 4 + waveX, wy + 14 + waveY, 20, 2);
+        }
+      }
+    }
+
+    // -------------------------------------------------------------
+    // Shoreline Surf Foam Pass: Breathing wave crests over coastal sand
+    // -------------------------------------------------------------
+    const foamTime = timeSec * foamSpeed * 2.4;
+    const foamStep = isPixelFoam ? 8 : 4;
+
+    for (let wy = 0; wy < WORLD_HEIGHT; wy += foamStep) {
+      for (let wx = 0; wx < WORLD_WIDTH; wx += foamStep) {
+        const elev = getElevation(wx, wy);
+
+        // Foam forms along the boundary between water and dry sand
+        // Boundary band: 0.40 to 0.48
+        if (elev >= 0.40 && elev <= 0.48) {
+          // Breathing sinusoidal wave oscillation
+          const wavePhase = (wx * 0.025 + wy * 0.02);
+          const breath = Math.sin(foamTime + wavePhase) * (foamAmp * 0.005);
+          const waveElevation = elev + breath;
+
+          // If the animated wave pushes water over the shore threshold
+          if (waveElevation >= ELEV_SHALLOW_WATER - 0.02 && waveElevation <= ELEV_SHALLOW_WATER + 0.04) {
+            const foamDist = Math.abs(waveElevation - ELEV_SHALLOW_WATER);
+            const foamOpacity = Math.max(0, 1.0 - (foamDist / 0.04));
+
+            if (isPixelFoam) {
+              // Stylized Retro Pixel Foam: crisp stepped pixels
+              targetCtx.fillStyle = `rgba(255, 255, 255, ${(foamOpacity * 0.85).toFixed(2)})`;
+              targetCtx.fillRect(wx, wy, foamStep - 1, foamStep - 1);
+
+              // Little sparkling bubbles
+              if ((wx + wy) % 16 === 0 && foamOpacity > 0.4) {
+                targetCtx.fillStyle = 'rgba(224, 242, 254, 0.95)';
+                targetCtx.fillRect(wx + 2, wy + 2, 2, 2);
+              }
+            } else {
+              // Smooth Organic Liquid Foam: soft rounded gradient wash
+              targetCtx.fillStyle = `rgba(255, 255, 255, ${(foamOpacity * 0.55).toFixed(2)})`;
+              targetCtx.beginPath();
+              targetCtx.arc(wx + foamStep / 2, wy + foamStep / 2, foamStep * 0.8, 0, Math.PI * 2);
+              targetCtx.fill();
+            }
+          }
+        }
+      }
+    }
+
+    targetCtx.restore();
+  }
+
+  /**
+   * Render Layer 5: Entities & Props with Oblique 2.5D Stacking & Submerged Foot Wash
+   */
+  function renderEntitiesLayer(targetCtx, timeSec) {
+    // 1. Gather all dynamic renderables (Props + Player)
+    const renderList = [...entities];
+
+    // Add Player
+    renderList.push({
+      id: 'player',
+      isPlayer: true,
+      asset: 'player',
+      x: player.x,
+      y: player.y,
+      renderWidth: player.renderWidth,
+      renderHeight: player.renderHeight,
+      anchorX: player.anchorX,
+      anchorY: player.anchorY,
+      frameWidth: player.frameWidth,
+      frameHeight: player.frameHeight,
+      dir: player.dir,
+      walking: player.walking,
+      animTime: player.animTime
+    });
+
+    // 2. Continuous Dynamic Y-Depth Sorting:
+    // Sort strictly by the entity foot position (bottom-most contact point)
+    renderList.sort((a, b) => a.y - b.y);
+
+    // 3. Render Each Entity in Order
+    for (const ent of renderList) {
+      const screenX = Math.round(ent.x - ent.anchorX);
+      const screenY = Math.round(ent.y - ent.anchorY);
+
+      // Check if entity is standing in water (Submerged check)
+      const footElev = getElevation(ent.x, ent.y);
+      const isSubmerged = footElev < ELEV_SHALLOW_WATER;
+
+      // Piranhas have idle bobbing motion
+      let offsetY = 0;
+      if (ent.isSwimmer) {
+        offsetY = Math.sin(timeSec * 3.0 + ent.phase) * 3;
+      }
+
+      // Check if asset image is ready
+      const img = assets[ent.asset];
+      const isReady = img && img.complete && img.naturalWidth > 0;
+
+      if (isReady) {
+        // Sprite sheet frame slicing
+        let srcX = ent.frameX || 0;
+        let srcY = ent.frameY || 0;
+
+        if (ent.isPlayer) {
+          const frameIdx = ent.walking ? Math.floor(ent.animTime * 10) % 8 : 0;
+          srcX = frameIdx * ent.frameWidth;
+          srcY = ent.dir * ent.frameHeight;
+        }
+
+        targetCtx.drawImage(
+          img,
+          srcX, srcY, ent.frameWidth, ent.frameHeight,
+          screenX, screenY + offsetY, ent.renderWidth, ent.renderHeight
+        );
+      } else {
+        // Procedural 2.5D Fallback Placeholder Graphic
+        renderFallbackEntity(targetCtx, ent, screenX, screenY + offsetY);
+      }
+
+      // -------------------------------------------------------------
+      // Submerged Foot Wash & Ripple Effect (when standing in water)
+      // -------------------------------------------------------------
+      if (isSubmerged && !ent.isSwimmer) {
+        targetCtx.save();
+
+        // 1. Water wash tint over submerged lower feet
+        targetCtx.fillStyle = 'rgba(6, 182, 212, 0.48)';
+        const washHeight = Math.min(16, (ELEV_SHALLOW_WATER - footElev) * 60 + 6);
+        targetCtx.fillRect(screenX, ent.y - washHeight, ent.renderWidth, washHeight);
+
+        // 2. Expanding circular wake ripples around submerged feet
+        const ripplePhase = (timeSec * 2.5 + ent.x) % (Math.PI * 2);
+        const rippleRad = 10 + Math.sin(ripplePhase) * 6;
+        const rippleAlpha = Math.max(0, 0.6 - (rippleRad / 18));
+
+        targetCtx.strokeStyle = `rgba(255, 255, 255, ${rippleAlpha.toFixed(2)})`;
+        targetCtx.lineWidth = 1.5;
+        targetCtx.beginPath();
+        targetCtx.ellipse(ent.x, ent.y, rippleRad, rippleRad * 0.45, 0, 0, Math.PI * 2);
+        targetCtx.stroke();
+
+        targetCtx.restore();
+      }
+    }
+  }
+
+  /**
+   * Procedural 2.5D fallback graphics if external WebP sprite is loading
+   */
+  function renderFallbackEntity(targetCtx, ent, sx, sy) {
+    targetCtx.save();
+    if (ent.isPlayer) {
+      // Stylized Character
+      targetCtx.fillStyle = '#f59e0b';
+      targetCtx.fillRect(sx + 24, sy + 16, 48, 64);
+      // Head
+      targetCtx.fillStyle = '#fcd34d';
+      targetCtx.beginPath();
+      targetCtx.arc(sx + 48, sy + 24, 16, 0, Math.PI * 2);
+      targetCtx.fill();
+      // Eyes / Dir indicator
+      targetCtx.fillStyle = '#1e293b';
+      targetCtx.fillRect(sx + 42, sy + 22, 4, 4);
+      targetCtx.fillRect(sx + 52, sy + 22, 4, 4);
+    } else if (ent.asset === 'house') {
+      // Cottage
+      targetCtx.fillStyle = '#b45309';
+      targetCtx.fillRect(sx + 32, sy + 100, 192, 140);
+      // Roof
+      targetCtx.fillStyle = '#dc2626';
+      targetCtx.beginPath();
+      targetCtx.moveTo(sx + 20, sy + 100);
+      targetCtx.lineTo(sx + 128, sy + 20);
+      targetCtx.lineTo(sx + 236, sy + 100);
+      targetCtx.closePath();
+      targetCtx.fill();
+    } else if (ent.asset === 'barrel') {
+      // Barrel
+      targetCtx.fillStyle = '#78350f';
+      targetCtx.fillRect(sx + 12, sy + 12, 40, 48);
+      targetCtx.fillStyle = '#451a03';
+      targetCtx.fillRect(sx + 12, sy + 20, 40, 4);
+      targetCtx.fillRect(sx + 12, sy + 44, 40, 4);
+    } else if (ent.asset === 'dock') {
+      // Wooden Pier
+      targetCtx.fillStyle = '#92400e';
+      targetCtx.fillRect(sx, sy + 40, ent.renderWidth, 40);
+      // Planks
+      targetCtx.strokeStyle = '#451a03';
+      targetCtx.lineWidth = 2;
+      for (let p = 0; p < ent.renderWidth; p += 16) {
+        targetCtx.strokeRect(sx + p, sy + 40, 16, 40);
+      }
+    } else if (ent.asset === 'palm') {
+      // Palm Tree
+      targetCtx.fillStyle = '#78350f';
+      targetCtx.fillRect(sx + 64, sy + 60, 12, 115);
+      // Palm fronds
+      targetCtx.fillStyle = '#16a34a';
+      targetCtx.beginPath();
+      targetCtx.arc(sx + 70, sy + 50, 40, 0, Math.PI * 2);
+      targetCtx.fill();
+    } else {
+      // Generic Prop
+      targetCtx.fillStyle = '#64748b';
+      targetCtx.fillRect(sx + 8, sy + 8, ent.renderWidth - 16, ent.renderHeight - 16);
+    }
+    targetCtx.restore();
+  }
+
+  /**
+   * Optional Grid Lines Debug Overlay
+   */
+  function renderGridOverlay(targetCtx) {
+    targetCtx.save();
+    targetCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    targetCtx.lineWidth = 1;
+    for (let c = 0; c <= GRID_COLS; c++) {
+      targetCtx.beginPath();
+      targetCtx.moveTo(c * TILE_SIZE, 0);
+      targetCtx.lineTo(c * TILE_SIZE, WORLD_HEIGHT);
+      targetCtx.stroke();
+    }
+    for (let r = 0; r <= GRID_ROWS; r++) {
+      targetCtx.beginPath();
+      targetCtx.moveTo(0, r * TILE_SIZE);
+      targetCtx.lineTo(WORLD_WIDTH, r * TILE_SIZE);
+      targetCtx.stroke();
+    }
+    targetCtx.restore();
+  }
+
+  // --- Substrate Coordinate Hover Inspector (HUD) ---
+  const canvasWrapper = document.getElementById('canvas-wrapper');
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const wx = Math.round((e.clientX - rect.left) * scaleX);
+    const wy = Math.round((e.clientY - rect.top) * scaleY);
+
+    if (wx < 0 || wx >= WORLD_WIDTH || wy < 0 || wy >= WORLD_HEIGHT) return;
+
+    const elev = getElevation(wx, wy);
+    const trail = getTrailIntensity(wx, wy);
+
+    document.getElementById('insp-pos').innerText = `X: ${wx}, Y: ${wy} (Tile: ${Math.floor(wx / TILE_SIZE)}, ${Math.floor(wy / TILE_SIZE)})`;
+
+    let elevDesc = `${elev.toFixed(2)} (Inland Plateau)`;
+    if (elev < ELEV_DEEP_WATER) elevDesc = `${elev.toFixed(2)} (Deep Ocean Basin)`;
+    else if (elev < ELEV_SHALLOW_WATER) elevDesc = `${elev.toFixed(2)} (Shallow Coastal Water)`;
+    else if (elev < ELEV_SAND_EXTENT) elevDesc = `${elev.toFixed(2)} (Dry Beach Sand)`;
+    document.getElementById('insp-elev').innerText = elevDesc;
+
+    // L1 Bedrock
+    document.getElementById('insp-l1').innerText = config.layers.l1 ? 'Opaque Basalt Rock' : '[Layer Hidden]';
+
+    // L2 Grass
+    let grassTxt = 'Masked Out (0.00)';
+    if (config.layers.l2) {
+      if (elev >= ELEV_GRASS_MIN && trail < 0.65) {
+        grassTxt = 'Lush Biome (Active)';
+      }
+    } else {
+      grassTxt = '[Layer Hidden]';
+    }
+    document.getElementById('insp-l2').innerText = grassTxt;
+
+    // L3 Sand/Topsoil
+    let sandTxt = 'None';
+    if (config.layers.l3) {
+      if (trail > 0.2) sandTxt = 'Dirt Path';
+      else if (elev >= ELEV_DEEP_WATER && elev < ELEV_SHALLOW_WATER) sandTxt = 'Submerged Sand (Under Water)';
+      else if (elev >= ELEV_SHALLOW_WATER && elev <= ELEV_SAND_EXTENT + 0.04) sandTxt = 'Exposed Beach Sand';
+    } else {
+      sandTxt = '[Layer Hidden]';
+    }
+    document.getElementById('insp-l3').innerText = sandTxt;
+
+    // L4 Water
+    let waterTxt = 'Dry Ground';
+    if (config.layers.l4) {
+      if (elev < ELEV_DEEP_WATER) waterTxt = `Deep Ocean (Alpha ${config.water.deepAlpha})`;
+      else if (elev < ELEV_SHALLOW_WATER) waterTxt = `Shallow Wave (Alpha ${config.water.shallowAlpha})`;
+    } else {
+      waterTxt = '[Layer Hidden]';
+    }
+    document.getElementById('insp-l4').innerText = waterTxt;
+
+    // L5 Entities
+    let hitEntity = 'None';
+    if (config.layers.l5) {
+      for (const ent of entities) {
+        if (Math.abs(wx - ent.x) < 40 && Math.abs(wy - ent.y) < 40) {
+          hitEntity = `${ent.asset.toUpperCase()} (#${ent.id})`;
+          break;
+        }
+      }
+    } else {
+      hitEntity = '[Layer Hidden]';
+    }
+    document.getElementById('insp-l5').innerText = hitEntity;
+  });
+
+  // --- UI Event Handlers & Layer Inspector Wiring ---
+
+  // Checkbox toggles for each layer
+  ['l1', 'l2', 'l3', 'l4', 'l5'].forEach(layerKey => {
+    const chk = document.getElementById(`chk-${layerKey}`);
+    const card = document.getElementById(`card-${layerKey}`);
+
+    chk.addEventListener('change', (e) => {
+      config.layers[layerKey] = e.target.checked;
+      card.classList.toggle('disabled', !e.target.checked);
+      if (currentSoloLayer) resetSoloButtons();
+    });
+  });
+
+  // Solo buttons
+  const soloButtons = document.querySelectorAll('.btn-solo[data-layer]');
+  soloButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const targetLayer = btn.getAttribute('data-layer');
+
+      if (currentSoloLayer === targetLayer) {
+        // Un-solo: restore all
+        ['l1', 'l2', 'l3', 'l4', 'l5'].forEach(lk => {
+          config.layers[lk] = true;
+          document.getElementById(`chk-${lk}`).checked = true;
+          document.getElementById(`card-${lk}`).classList.remove('disabled');
+        });
+        resetSoloButtons();
+        currentSoloLayer = null;
+        showToast('Restored all substrate layers');
+      } else {
+        // Solo this layer
+        currentSoloLayer = targetLayer;
+        ['l1', 'l2', 'l3', 'l4', 'l5'].forEach(lk => {
+          const isTarget = lk === targetLayer;
+          config.layers[lk] = isTarget;
+          document.getElementById(`chk-${lk}`).checked = isTarget;
+          document.getElementById(`card-${lk}`).classList.toggle('disabled', !isTarget);
+        });
+        resetSoloButtons();
+        btn.classList.add('active');
+        showToast(`Soloing [${targetLayer.toUpperCase()}]`);
+      }
+    });
+  });
+
+  function resetSoloButtons() {
+    soloButtons.forEach(b => b.classList.remove('active'));
+  }
+
+  // Master Presets
+  document.getElementById('preset-all').addEventListener('click', () => {
+    ['l1', 'l2', 'l3', 'l4', 'l5'].forEach(lk => {
+      config.layers[lk] = true;
+      document.getElementById(`chk-${lk}`).checked = true;
+      document.getElementById(`card-${lk}`).classList.remove('disabled');
+    });
+    resetSoloButtons();
+    currentSoloLayer = null;
+    showToast('Preset: All 5 Layers On');
+  });
+
+  document.getElementById('preset-substr-only').addEventListener('click', () => {
+    ['l1', 'l2', 'l3', 'l4'].forEach(lk => {
+      config.layers[lk] = true;
+      document.getElementById(`chk-${lk}`).checked = true;
+      document.getElementById(`card-${lk}`).classList.remove('disabled');
+    });
+    config.layers.l5 = false;
+    document.getElementById('chk-l5').checked = false;
+    document.getElementById('card-l5').classList.add('disabled');
+    resetSoloButtons();
+    currentSoloLayer = null;
+    showToast('Preset: Substrate Only (No Props)');
+  });
+
+  document.getElementById('preset-xray-water').addEventListener('click', () => {
+    // Hide water (L4) so submerged sand and bedrock are totally visible!
+    config.layers.l1 = true;
+    config.layers.l2 = true;
+    config.layers.l3 = true;
+    config.layers.l4 = false;
+    config.layers.l5 = true;
+
+    ['l1', 'l2', 'l3', 'l5'].forEach(lk => {
+      document.getElementById(`chk-${lk}`).checked = true;
+      document.getElementById(`card-${lk}`).classList.remove('disabled');
+    });
+    document.getElementById('chk-l4').checked = false;
+    document.getElementById('card-l4').classList.add('disabled');
+
+    resetSoloButtons();
+    currentSoloLayer = null;
+    showToast('X-Ray Water: Submerged sand exposed!');
+  });
+
+  document.getElementById('preset-bedrock-only').addEventListener('click', () => {
+    ['l2', 'l3', 'l4', 'l5'].forEach(lk => {
+      config.layers[lk] = false;
+      document.getElementById(`chk-${lk}`).checked = false;
+      document.getElementById(`card-${lk}`).classList.add('disabled');
+    });
+    config.layers.l1 = true;
+    document.getElementById('chk-l1').checked = true;
+    document.getElementById('card-l1').classList.remove('disabled');
+    resetSoloButtons();
+    currentSoloLayer = null;
+    showToast('Preset: Bedrock Base Only');
+  });
+
+  // Simulation Sliders
+  function bindSlider(id, targetObj, key, valId, suffix = '', multiplier = 1) {
+    const slider = document.getElementById(id);
+    const label = document.getElementById(valId);
+    slider.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      targetObj[key] = val * multiplier;
+      label.innerText = val.toFixed(2) + suffix;
+    });
+  }
+
+  bindSlider('rng-shallow-alpha', config.water, 'shallowAlpha', 'val-shallow-alpha');
+  bindSlider('rng-deep-alpha', config.water, 'deepAlpha', 'val-deep-alpha');
+  bindSlider('rng-foam-speed', config.water, 'foamSpeed', 'val-foam-speed', 'x');
+  bindSlider('rng-foam-amp', config.water, 'foamAmp', 'val-foam-amp', ' px');
+  bindSlider('rng-water-speed', config.water, 'waterSpeed', 'val-water-speed', 'x');
+
+  // Foam Aesthetic Toggle
+  const btnFoamPixel = document.getElementById('btn-foam-pixel');
+  const btnFoamSmooth = document.getElementById('btn-foam-smooth');
+
+  btnFoamPixel.addEventListener('click', () => {
+    config.water.foamAesthetic = 'pixel';
+    btnFoamPixel.classList.add('active');
+    btnFoamSmooth.classList.remove('active');
+    showToast('Shoreline Foam: Stylized Retro Pixel');
+  });
+
+  btnFoamSmooth.addEventListener('click', () => {
+    config.water.foamAesthetic = 'smooth';
+    btnFoamSmooth.classList.add('active');
+    btnFoamPixel.classList.remove('active');
+    showToast('Shoreline Foam: Smooth Organic Liquid');
+  });
+
+  // Procedural Noise Sliders
+  document.getElementById('rng-noise-freq').addEventListener('input', (e) => {
+    config.noise.freq = parseFloat(e.target.value);
+    document.getElementById('val-noise-freq').innerText = config.noise.freq.toFixed(4);
+  });
+
+  document.getElementById('rng-island-rad').addEventListener('input', (e) => {
+    config.noise.islandRadius = parseFloat(e.target.value);
+    document.getElementById('val-island-rad').innerText = Math.round(config.noise.islandRadius) + ' px';
+  });
+
+  document.getElementById('btn-rebake-all').addEventListener('click', () => {
+    bakeStaticLayers();
+  });
+
+  document.getElementById('btn-random-seed').addEventListener('click', () => {
+    config.noise.seed = Math.floor(Math.random() * 100000);
+    simplex = new SimplexNoise(config.noise.seed);
+    bakeStaticLayers();
+    showToast(`New island generated (Seed: ${config.noise.seed})`);
+  });
+
+  // Grid Debug Checkbox
+  document.getElementById('chk-grid').addEventListener('change', (e) => {
+    config.debug.showGrid = e.target.checked;
+  });
+
+  // Viewport Zoom & Camera Controls
+  const btnZoomFit = document.getElementById('btn-zoom-fit');
+  const btnZoom1x = document.getElementById('btn-zoom-1x');
+  const btnZoom15x = document.getElementById('btn-zoom-15x');
+  const btnCenterPlayer = document.getElementById('btn-center-player');
+
+  function setZoom(zoomFactor, activeBtn) {
+    config.camera.zoom = zoomFactor;
+    canvas.style.transform = `scale(${zoomFactor})`;
+    [btnZoomFit, btnZoom1x, btnZoom15x].forEach(b => b.classList.remove('active'));
+    if (activeBtn) activeBtn.classList.add('active');
+  }
+
+  btnZoomFit.addEventListener('click', () => {
+    const wrapper = document.getElementById('canvas-wrapper');
+    const scale = Math.min((wrapper.clientWidth - 48) / WORLD_WIDTH, (wrapper.clientHeight - 48) / WORLD_HEIGHT);
+    setZoom(Math.max(0.3, scale), btnZoomFit);
+  });
+
+  btnZoom1x.addEventListener('click', () => setZoom(1.0, btnZoom1x));
+  btnZoom15x.addEventListener('click', () => setZoom(1.5, btnZoom15x));
+
+  btnCenterPlayer.addEventListener('click', () => {
+    const wrapper = document.getElementById('canvas-wrapper');
+    const targetScrollX = (player.x * config.camera.zoom) - (wrapper.clientWidth / 2);
+    const targetScrollY = (player.y * config.camera.zoom) - (wrapper.clientHeight / 2);
+    wrapper.scrollTo({ left: targetScrollX, top: targetScrollY, behavior: 'smooth' });
+    showToast('Centered camera on player');
+  });
+
+  // Toast Notification
+  let toastTimer = null;
+  function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.innerText = msg;
+    toast.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toast.classList.remove('show');
+    }, 2200);
+  }
+
+  // Initial Startup Execution
+  bakeStaticLayers();
+  requestAnimationFrame(renderFrame);
+
+  // Initial camera scroll to player
+  setTimeout(() => {
+    const wrapper = document.getElementById('canvas-wrapper');
+    wrapper.scrollLeft = (player.x) - (wrapper.clientWidth / 2);
+    wrapper.scrollTop = (player.y) - (wrapper.clientHeight / 2);
+  }, 100);
+
+  </script>
+</body>
+</html>
