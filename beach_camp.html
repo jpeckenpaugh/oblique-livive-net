@@ -620,7 +620,7 @@
 
     <!-- Section 2: Water & Foam Simulation Sliders -->
     <div class="sidebar-section">
-      <div class="section-title" style="margin-bottom: 10px;">Water & Foam Simulation</div>
+      <div class="section-title" style="margin-bottom: 10px;">Water & Foam Simulation (10 FPS Stepped, 1/6x Speed)</div>
 
       <div class="control-group">
         <div class="control-label-row">
@@ -1061,13 +1061,11 @@
   }
 
   /**
-   * Evaluates procedural elevation at world pixel coordinate (wx, wy) for Beach Camp.
-   * Models the South-East corner / headland of a massive off-screen island continent:
-   * - Sectors 1, 2, 4, 5: Solid continental landmass extending offscreen to North and West.
-   * - Sectors 3, 6, 7, 8, 9: Surrounding ocean to East, South, and South-East.
-   * - Sector 5: The continental promontory & beach camp, sloping into golden dunes.
+   * Evaluates macro continental coastline elevation at world pixel coordinate (wx, wy).
+   * Defines the true solid island/continent landmass vs. ocean boundary (WITHOUT the freshwater river carving).
+   * Used for ocean shoreline contours and ocean swell clipping so ocean waves NEVER enter the river.
    */
-  function getElevation(wx, wy) {
+  function getMacroCoastElevation(wx, wy) {
     // Multi-octave domain warping to break up geometric lines into organic coastlines
     const qx = simplex.fbm(wx * 0.0022, wy * 0.0022, 2, 0.5, 2.0) * 110;
     const qy = simplex.fbm(wx * 0.0022 + 5.2, wy * 0.0022 + 1.3, 2, 0.5, 2.0) * 110;
@@ -1077,7 +1075,6 @@
     const warpedY = wy + qy + ry;
 
     // Super-ellipse corner metric centered at NW (0, 0), encompassing Sectors 1, 2, 4, 5
-    // Sector boundaries: X = 640, 1280, 1920; Y = 512, 1024, 1536
     const nx = Math.max(0, warpedX / 1380);
     const ny = Math.max(0, warpedY / 1100);
     const dist = Math.pow(Math.pow(nx, 3.8) + Math.pow(ny, 3.8), 1 / 3.8);
@@ -1096,7 +1093,6 @@
     let elev = cornerGradient + noiseVal + micro;
 
     // Ocean deepening on open sea borders (East and South)
-    // Deep pelagic ocean in Sector 9 (SE)
     if (wx > 1500) {
       const eastDrop = (wx - 1500) / 420;
       elev -= eastDrop * 0.12;
@@ -1110,6 +1106,16 @@
       const seDrop = Math.hypot((wx - 1400) / 520, (wy - 1100) / 436);
       elev -= seDrop * 0.14;
     }
+
+    return Math.max(0.0, Math.min(1.0, elev));
+  }
+
+  /**
+   * Evaluates procedural elevation at world pixel coordinate (wx, wy) for Beach Camp.
+   * Includes both macro continental landmass and carved freshwater river channel.
+   */
+  function getElevation(wx, wy) {
+    let elev = getMacroCoastElevation(wx, wy);
 
     // Continental River Channel Carving (NW to SE meander)
     // Physically carves a U-shaped stream channel with sloping earthen banks
@@ -1227,16 +1233,22 @@
   const canvasL2 = document.createElement('canvas'); // Topsoil, Earth & Beach Sand (Continental Mantle)
   const canvasL3 = document.createElement('canvas'); // Biome Grass Field (Vegetation Carpet)
   const canvasL4_bathymetry = document.createElement('canvas'); // Pre-baked Continuous Water Bathymetry
+  const canvasL4_water = document.createElement('canvas'); // 10 FPS Stepped Dynamic Water & Wave Buffer
 
   canvasL1.width = WORLD_WIDTH; canvasL1.height = WORLD_HEIGHT;
   canvasL2.width = WORLD_WIDTH; canvasL2.height = WORLD_HEIGHT;
   canvasL3.width = WORLD_WIDTH; canvasL3.height = WORLD_HEIGHT;
   canvasL4_bathymetry.width = WORLD_WIDTH; canvasL4_bathymetry.height = WORLD_HEIGHT;
+  canvasL4_water.width = WORLD_WIDTH; canvasL4_water.height = WORLD_HEIGHT;
 
   const ctxL1 = canvasL1.getContext('2d');
   const ctxL2 = canvasL2.getContext('2d');
   const ctxL3 = canvasL3.getContext('2d');
   const ctxL4_bathymetry = canvasL4_bathymetry.getContext('2d');
+  const ctxL4_water = canvasL4_water.getContext('2d');
+
+  let lastWaterEvalNow = 0;
+  const WATER_UPDATE_INTERVAL_MS = 100; // 10 FPS (100ms evaluation interval)
 
   // =========================================================================
   // LAYER 1 MEMORY MODEL & BEDROCK ARCHITECTURE (The Retro Voxel Soul)
@@ -1625,7 +1637,7 @@
     for (let r = 0; r <= rows; r++) {
       const wy = r * STEP;
       for (let c = 0; c <= cols; c++) {
-        grid[r * (cols + 1) + c] = getElevation(c * STEP, wy);
+        grid[r * (cols + 1) + c] = getMacroCoastElevation(c * STEP, wy);
       }
     }
 
@@ -1726,8 +1738,8 @@
       for (let i = 0; i < m; i++) {
         const pt = loop[i];
         const eps = 4;
-        const gx = getElevation(pt.x + eps, pt.y) - getElevation(pt.x - eps, pt.y);
-        const gy = getElevation(pt.x, pt.y + eps) - getElevation(pt.x, pt.y - eps);
+        const gx = getMacroCoastElevation(pt.x + eps, pt.y) - getMacroCoastElevation(pt.x - eps, pt.y);
+        const gy = getMacroCoastElevation(pt.x, pt.y + eps) - getMacroCoastElevation(pt.x, pt.y - eps);
         const len = Math.hypot(gx, gy);
         if (len > 0.0001) {
           pt.nx = -gx / len;
@@ -1957,6 +1969,9 @@
 
     // Extract Marching Squares Shoreline Contours
     extractShorelineContours();
+
+    // Reset water evaluation timer for immediate update
+    lastWaterEvalNow = 0;
 
     console.timeEnd('bakeStaticLayers');
     showToast('Substrate static cache re-baked (L1, L2, L3, L4)!');
@@ -2423,9 +2438,16 @@
 
     // -------------------------------------------------------------
     // PASS 2: DYNAMIC FLOWING WATER & SURF FOAM (Layer 4)
+    // Evaluated strictly 10 times per second (10 FPS retro cadence) at 1/6x tranquil speed
     // -------------------------------------------------------------
+    if (now - lastWaterEvalNow >= WATER_UPDATE_INTERVAL_MS) {
+      lastWaterEvalNow = now;
+      const slowWaterTimeSec = (now / 1000) / 6.0; // 6x speed reduction
+      renderWaterLayer(ctxL4_water, slowWaterTimeSec);
+    }
+
     if (config.layers.l4) {
-      renderWaterLayer(ctx, timeSec);
+      ctx.drawImage(canvasL4_water, 0, 0);
     }
 
     // Optional 3x3 Sectors Diagnostic Overlay
@@ -2521,10 +2543,10 @@
         const wy = cy + w * uy + v * vy + undulate * uy;
 
         if (wx >= -40 && wx <= WORLD_WIDTH + 40 && wy >= -40 && wy <= WORLD_HEIGHT + 40) {
-          const elev = sampleElevation(wx, wy);
+          const elev = getMacroCoastElevation(wx, wy);
 
           // Strictly ocean water only (elev < ELEV_SHALLOW_WATER = 0.44)
-          // Waves never cross onto the solid continental landmass!
+          // Waves never cross onto the solid continental landmass or enter inland rivers!
           if (elev < ELEV_SHALLOW_WATER) {
             // Shoaling factor: waves gently fade and compress as they approach the shoreline
             let alpha = 1.0;
@@ -2760,45 +2782,73 @@
       }
     }
 
-    // 4. Directional Meandering River Flow Currents (NW to SE downstream)
-    const riverFlowSpeed = timeSec * waterSpeed * 2.6;
+    // 4. Directional Meandering River Flow Currents (Flowing Downstream NW -> SE)
+    const downstreamSpeed = timeSec * 45.0; // Steady downstream flow velocity
+
     for (let sIdx = 0; sIdx < riverSegments.length; sIdx++) {
       const seg = riverSegments[sIdx];
-      // Only draw river flow on the inland reach before ocean blend
-      if (seg.globalT > 0.88) continue;
+      if (seg.globalT > 0.92) continue; // Estuary blend
 
-      const flowPhase = (sIdx * 0.45 - riverFlowSpeed) % (Math.PI * 2);
-      const flowBreath = (Math.sin(flowPhase) + 1.0) * 0.5; // [0, 1]
+      const perpX = -seg.dy;
+      const perpY = seg.dx;
 
-      if (flowBreath > 0.25) {
-        // Lateral river width ripples
-        const perpX = -seg.dy;
-        const perpY = seg.dx;
+      // A. Downstream Flowing Streamlines (Negative lineDashOffset pushes dashes downstream)
+      for (const offRatio of [-0.45, 0.0, 0.45]) {
+        const offDist = seg.halfWidth * offRatio;
+        const sx1 = seg.x1 + perpX * offDist;
+        const sy1 = seg.y1 + perpY * offDist;
+        const sx2 = seg.x2 + perpX * offDist;
+        const sy2 = seg.y2 + perpY * offDist;
 
-        // Draw 2 streamline ribbons
-        for (const offsetSign of [-0.4, 0.35]) {
-          const offDist = seg.halfWidth * offsetSign;
-          const sx1 = seg.x1 + perpX * offDist;
-          const sy1 = seg.y1 + perpY * offDist;
-          const sx2 = seg.x2 + perpX * offDist;
-          const sy2 = seg.y2 + perpY * offDist;
+        targetCtx.save();
+        targetCtx.beginPath();
+        targetCtx.moveTo(sx1, sy1);
+        targetCtx.lineTo(sx2, sy2);
+        targetCtx.setLineDash([12, 16, 6, 20]);
+        // Negative offset translates dash pattern downstream along the segment vector
+        targetCtx.lineDashOffset = -downstreamSpeed * (offRatio === 0.0 ? 1.25 : 0.95) - sIdx * 8;
+        targetCtx.strokeStyle = offRatio === 0.0 ? 'rgba(210, 240, 255, 0.32)' : 'rgba(180, 225, 248, 0.22)';
+        targetCtx.lineWidth = isPixelFoam ? 2 : 1.5;
+        targetCtx.stroke();
+        targetCtx.restore();
+      }
 
-          targetCtx.beginPath();
-          targetCtx.moveTo(sx1, sy1);
-          targetCtx.lineTo(sx2, sy2);
-          targetCtx.strokeStyle = `rgba(186, 230, 253, ${(0.14 * flowBreath).toFixed(2)})`;
-          targetCtx.lineWidth = isPixelFoam ? 2 : 1.5;
-          targetCtx.stroke();
-        }
+      // B. Downstream V-Shaped Chevron Ripples (Natural River Current Formation)
+      // Natural currents form V-crests pointing downstream in the direction of travel
+      const numRipples = Math.max(1, Math.round(seg.length / 32));
+      for (let r = 0; r < numRipples; r++) {
+        const ripplePhase = ((downstreamSpeed * 0.8 + sIdx * 24 + r * (seg.length / numRipples)) % seg.length) / seg.length;
+        // Traveling downstream from seg.x1,y1 to seg.x2,y2
+        const t = ripplePhase;
+        const cx = seg.x1 + seg.dx * (seg.length * t) + seg.dx * 3.5;
+        const cy = seg.y1 + seg.dy * (seg.length * t) + seg.dy * 3.5;
 
-        // Sparkling water ripple highlights over river rocks
-        if ((sIdx % 3 === 0) && flowBreath > 0.65) {
-          const rippleX = seg.x1 + (seg.x2 - seg.x1) * 0.5 + (Math.sin(sIdx * 3.7) * seg.halfWidth * 0.4);
-          const rippleY = seg.y1 + (seg.y2 - seg.y1) * 0.5 + (Math.cos(sIdx * 3.7) * seg.halfWidth * 0.4);
-          targetCtx.fillStyle = 'rgba(255, 255, 255, 0.42)';
-          const rSize = isPixelFoam ? 3 : 2;
-          targetCtx.fillRect(rippleX, rippleY, rSize, rSize);
-        }
+        // Chevron wings point slightly backward/upstream toward the banks
+        const wingDist = seg.halfWidth * 0.55;
+        const backDist = 4.0;
+        const lx = seg.x1 + seg.dx * (seg.length * t - backDist) + perpX * wingDist;
+        const ly = seg.y1 + seg.dy * (seg.length * t - backDist) + perpY * wingDist;
+        const rx = seg.x1 + seg.dx * (seg.length * t - backDist) - perpX * wingDist;
+        const ry = seg.y1 + seg.dy * (seg.length * t - backDist) - perpY * wingDist;
+
+        targetCtx.beginPath();
+        targetCtx.moveTo(lx, ly);
+        targetCtx.quadraticCurveTo(cx, cy, rx, ry);
+        targetCtx.strokeStyle = 'rgba(225, 245, 255, 0.26)';
+        targetCtx.lineWidth = isPixelFoam ? 2 : 1.2;
+        targetCtx.stroke();
+      }
+
+      // C. Drifting River Foam Flecks & Sparkling Micro-Riffles (Floating strictly downstream)
+      if (sIdx % 2 === 0) {
+        const fleckProgress = ((downstreamSpeed * 1.1 + sIdx * 37) % seg.length);
+        const latJitter = Math.sin(sIdx * 2.3 + downstreamSpeed * 0.1) * (seg.halfWidth * 0.4);
+        const fx = seg.x1 + seg.dx * fleckProgress + perpX * latJitter;
+        const fy = seg.y1 + seg.dy * fleckProgress + perpY * latJitter;
+
+        targetCtx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+        const sz = isPixelFoam ? 2 : 1;
+        targetCtx.fillRect(fx, fy, sz, sz);
       }
     }
 
