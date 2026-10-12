@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>2.5D Oblique Sprite Stacking Sandbox</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏝️</text></svg>">
   <style>
     :root {
       --bg-dark: #121417;
@@ -44,10 +45,11 @@
     #canvas-wrapper {
       flex: 1;
       display: flex;
-      align-items: center;
-      justify-content: center;
+      align-items: flex-start;
+      justify-content: flex-start;
       overflow: auto;
       padding: 24px;
+      scroll-behavior: smooth;
     }
 
     canvas {
@@ -57,6 +59,8 @@
       image-rendering: pixelated;
       image-rendering: crisp-edges;
       transition: transform 0.15s ease-out;
+      transform-origin: top left;
+      margin: auto;
     }
 
     /* Top HUD / Controls bar */
@@ -293,17 +297,17 @@
     <div id="top-bar">
       <div class="title-group">
         <h1>2.5D Oblique Sprite Stacking Sandbox</h1>
-        <p>15×12 Orthogonal Grid • 64×64 Footprints • Dynamic Y-Sorting Depth</p>
+        <p>30×24 Expanded World (4× Area) • 64×64 Footprints • Dynamic Y-Sorting Depth</p>
       </div>
       <div class="hud-stats">
         <div class="stat-pill" id="stat-fps">FPS: 60</div>
-        <div class="stat-pill" id="stat-player-tile">Tile: (7, 6)</div>
-        <div class="stat-pill" id="stat-depth-count">Renderables: 5</div>
+        <div class="stat-pill" id="stat-player-tile">Tile: (8, 5)</div>
+        <div class="stat-pill" id="stat-depth-count">Renderables: 15</div>
       </div>
     </div>
 
     <div id="canvas-wrapper">
-      <canvas id="gameCanvas" width="960" height="768"></canvas>
+      <canvas id="gameCanvas" width="1920" height="1536"></canvas>
     </div>
   </div>
 
@@ -315,7 +319,7 @@
       <div class="section-title">Controls</div>
       <div class="info-callout">
         Use <span class="key-badge">W</span> <span class="key-badge">A</span> <span class="key-badge">S</span> <span class="key-badge">D</span> or Arrow Keys to walk.
-        <br>Walk <strong>behind</strong> the palm tree & house to test occlusion, and <strong>in front</strong> to test foreground stacking.
+        <br>Click any sprite on the canvas to open it in the <strong>Sprite Editor</strong>!
       </div>
     </div>
 
@@ -323,6 +327,14 @@
     <div class="section">
       <div class="section-title">Debug Overlays</div>
       <div class="checkbox-list">
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-snap-grid" checked>
+          <span>Snap to Grid Movement (1 Tile per Step)</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-camera-follow" checked>
+          <span>Auto-Center Camera on Player</span>
+        </label>
         <label class="checkbox-item">
           <input type="checkbox" id="chk-grid" checked>
           <span>Show Grid Lines</span>
@@ -333,11 +345,11 @@
         </label>
         <label class="checkbox-item">
           <input type="checkbox" id="chk-anchor" checked>
-          <span><span class="color-legend" style="background: #eab308;"></span>Registration Anchor (Bottom-Center)</span>
+          <span><span class="color-legend" style="background: #eab308;"></span>Registration Anchor Crosshair</span>
         </label>
         <label class="checkbox-item">
           <input type="checkbox" id="chk-bounds" checked>
-          <span><span class="color-legend" style="background: #06b6d4;"></span>Sprite Bounding Box (128×128)</span>
+          <span><span class="color-legend" style="background: #06b6d4;"></span>Sprite Bounding Boxes</span>
         </label>
         <label class="checkbox-item">
           <input type="checkbox" id="chk-collision" checked>
@@ -345,17 +357,151 @@
         </label>
         <label class="checkbox-item">
           <input type="checkbox" id="chk-water-solid" checked>
-          <span>Water Impassable (Solid)</span>
+          <span>Water Impassable (Pier Walkable)</span>
         </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-shadows" checked>
+          <span>Directional Silhouette Shadows (Sun at East, 20° CCW)</span>
+        </label>
+        <div style="margin-top: 6px; padding: 6px 8px; background: #14171d; border-radius: 4px; border: 1px solid #2b303a;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+            <label style="margin: 0; font-size: 0.74rem;">Shadow Baseline Feather</label>
+            <span id="lbl-shadow-feather" style="font-size: 0.76rem; color: #38bdf8; font-family: monospace; font-weight: 600;">40%</span>
+          </div>
+          <input type="range" id="rng-shadow-feather" min="0" max="60" value="40" style="width: 100%; accent-color: var(--accent); cursor: pointer;">
+        </div>
       </div>
 
       <div style="margin-top: 14px;">
         <label>Pixel Zoom Scale</label>
         <div class="btn-group">
+          <button id="zoom-05x">0.5x (Fit)</button>
           <button id="zoom-1x" class="active">1x</button>
-          <button id="zoom-2x">2x Scale</button>
-          <button id="btn-reset-pos">Reset Positions</button>
+          <button id="zoom-15x">1.5x</button>
+          <button id="btn-reset-pos">Reset</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Sprite & Prop Inspector / Editor -->
+    <div class="section" id="section-sprite-editor">
+      <div class="section-title">Sprite & Prop Editor</div>
+      <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 8px; line-height: 1.4;">
+        Click any sprite in the canvas, or select from the dropdown to adjust its frame, anchor, position, and dimensions live.
+      </div>
+
+      <div class="form-group">
+        <label>Selected Target</label>
+        <select id="editor-entity-select">
+          <option value="">-- Click Sprite or Select --</option>
+        </select>
+      </div>
+
+      <div id="editor-controls-panel" style="display: none; padding: 10px; background: #14171d; border-radius: 6px; border: 1px solid #2b303a;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span id="ed-entity-name" style="font-weight: 600; font-size: 0.84rem; color: #38bdf8;">Item Name</span>
+          <span id="ed-entity-id" style="font-size: 0.70rem; color: var(--text-muted); font-family: monospace;">id</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+          <div>
+            <label>Tile X (Col 0..29)</label>
+            <input type="number" id="ed-tile-x" min="0" max="29" style="width: 100%;">
+          </div>
+          <div>
+            <label>Tile Y (Row 0..23)</label>
+            <input type="number" id="ed-tile-y" min="0" max="23" style="width: 100%;">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <label style="margin: 0;">Sprite Sheet Frame</label>
+            <span id="ed-frame-label" style="font-size: 0.74rem; color: #f59e0b; font-family: monospace; font-weight: 600;">Frame 0</span>
+          </div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button id="ed-prev-frame" style="padding: 4px 10px;" title="Previous Angle / Frame">◀</button>
+            <input type="range" id="ed-frame-slider" min="0" max="11" value="0" style="flex: 1; accent-color: #f59e0b; cursor: pointer;">
+            <button id="ed-next-frame" style="padding: 4px 10px;" title="Next Angle / Frame">▶</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Anchor Registration Preset</label>
+          <select id="ed-anchor-preset">
+            <option value="bottom-center">Bottom-Center (Props, Trees, Humanoids)</option>
+            <option value="center">Center (Mid-Body / Quadrupeds)</option>
+            <option value="custom">Custom (Specify X / Y below)</option>
+          </select>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+          <div>
+            <label>Anchor X (px)</label>
+            <input type="number" id="ed-anchor-x">
+          </div>
+          <div>
+            <label>Anchor Y (px)</label>
+            <input type="number" id="ed-anchor-y">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+          <div>
+            <label>Render Width (px)</label>
+            <input type="number" id="ed-render-w">
+          </div>
+          <div>
+            <label>Render Height (px)</label>
+            <input type="number" id="ed-render-h">
+          </div>
+        </div>
+
+        <div class="btn-group" style="display: flex; gap: 8px;">
+          <button id="ed-btn-center-cam" style="flex: 1;">Center View</button>
+          <button id="ed-btn-deselect" style="flex: 1;">Deselect</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grass Flow & Natural Gradient Smoothing -->
+    <div class="section" id="section-grass-smoothing">
+      <div class="section-title">Grass Flow & Gradient Smoothing</div>
+      <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 8px; line-height: 1.4;">
+        Buffs hard tile box edges into wandering meanders using out-of-sync harmonic sine waves and seam smudging.
+      </div>
+
+      <label>Flow / Smoothing Preset</label>
+      <div class="btn-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+        <button id="btn-grass-mode-meander" class="active">🌊 Sine Meander</button>
+        <button id="btn-grass-mode-smudge">🍃 Turf Smudge</button>
+        <button id="btn-grass-mode-ribbons">〰️ Flow Ribbons</button>
+        <button id="btn-grass-mode-biome">🗺️ Multi-Octave</button>
+      </div>
+
+      <div style="padding: 8px 10px; background: #14171d; border-radius: 6px; border: 1px solid #2b303a; margin-bottom: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+          <label style="margin: 0; font-size: 0.74rem;">Sine Meander Amplitude</label>
+          <span id="lbl-meander-amp" style="font-size: 0.76rem; color: #38bdf8; font-family: monospace; font-weight: 600;">35px</span>
+        </div>
+        <input type="range" id="rng-meander-amp" min="0" max="80" value="35" style="width: 100%; accent-color: var(--accent); cursor: pointer;">
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; margin-bottom: 3px;">
+          <label style="margin: 0; font-size: 0.74rem;">Wave Frequency</label>
+          <span id="lbl-meander-freq" style="font-size: 0.76rem; color: #38bdf8; font-family: monospace; font-weight: 600;">1.0x</span>
+        </div>
+        <input type="range" id="rng-meander-freq" min="30" max="250" value="100" style="width: 100%; accent-color: var(--accent); cursor: pointer;">
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; margin-bottom: 3px;">
+          <label style="margin: 0; font-size: 0.74rem;">Tile Seam Smudge Bleed</label>
+          <span id="lbl-seam-smudge" style="font-size: 0.76rem; color: #38bdf8; font-family: monospace; font-weight: 600;">12px</span>
+        </div>
+        <input type="range" id="rng-seam-smudge" min="0" max="24" value="12" style="width: 100%; accent-color: var(--accent); cursor: pointer;">
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <button id="btn-toggle-pure-grass" class="active" style="flex: 1;">🌱 Pure Grass Land</button>
+        <button id="btn-toggle-dirt-path" style="flex: 1;">🪨 Show Dirt Trail</button>
       </div>
     </div>
 
@@ -432,10 +578,12 @@
     <div class="section">
       <div class="section-title">Scene Props & NPCs</div>
       <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.5;">
-        <div style="margin-bottom: 6px;">• <strong>Tropical Palm Tree</strong>: Tile (7, 4) — 128×128 (anchored at base)</div>
-        <div style="margin-bottom: 6px;">• <strong>Fisher's House</strong>: Tiles (2, 2) to (3, 3) — 256×256 sprite (double size, 4-tile solid footprint)</div>
-        <div style="margin-bottom: 6px;">• <strong>Wooden Barrel</strong>: Tile (5, 6) — 64×64 sprite (half size, solid obstacle)</div>
-        <div style="margin-bottom: 6px;">• <strong>NPC River Rat</strong>: Tile (7, 8) — 128×128 quadruped (centered mid-body in tile, nose/tail extend outward)</div>
+        <div style="margin-bottom: 6px;">• <strong>Towering Palm Trees (x4)</strong>: 256×256 towering trees (anchored at trunk base, canopies overlap tiles above)</div>
+        <div style="margin-bottom: 6px;">• <strong>Fisher's Cottage</strong>: Tiles (2, 2) to (3, 3) — 256×256 sprite (double size, 4-tile solid footprint)</div>
+        <div style="margin-bottom: 6px;">• <strong>Barrels (x3)</strong>: Tucked under the cottage eaves (Tiles 1,1 & 4,1) + trail barrel (5,6)</div>
+        <div style="margin-bottom: 6px;">• <strong>Brown River Rat</strong>: Tile (7, 8) — 128×128 quadruped with autonomous wandering & head turning</div>
+        <div style="margin-bottom: 6px;">• <strong>Black Rat NPC</strong>: Tile (1, 5) — 76×76 (60% scale) agile black rat created by shading the regular rat bitmap</div>
+        <div style="margin-bottom: 6px;">• <strong>Directional Silhouette Shadows</strong>: Sheared 20° CCW to the left from east sun, cast flat on terrain under all props & characters</div>
       </div>
     </div>
 
@@ -451,19 +599,23 @@
 
     // Grid specifications
     const TILE_SIZE = 64;
-    const GRID_COLS = 15;
-    const GRID_ROWS = 12;
-    canvas.width = GRID_COLS * TILE_SIZE; // 960
-    canvas.height = GRID_ROWS * TILE_SIZE; // 768
+    const GRID_COLS = 30;
+    const GRID_ROWS = 24;
+    canvas.width = GRID_COLS * TILE_SIZE; // 1920
+    canvas.height = GRID_ROWS * TILE_SIZE; // 1536
 
     // Debug flags
     const debug = {
+      snapToGrid: true,
+      cameraFollow: true,
       grid: true,
       hitbox: true,
       anchor: true,
       bounds: true,
       collision: true,
-      waterSolid: true
+      waterSolid: true,
+      shadows: true,
+      shadowFeather: 0.40
     };
 
     // Terrain Constants & Default Map
@@ -472,26 +624,86 @@
     const TERRAIN_WATER = 2;
     const TERRAIN_SAND = 3;
 
-    const DEFAULT_TERRAIN_MAP = [
-      // 0: Grass, 1: Dirt, 2: Water, 3: Sand Beach
-      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 2, 2, 2], // Row 0
-      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 2, 2, 2], // Row 1
-      [0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 2, 2, 2, 2], // Row 2 (Fisher's House at 2,2)
-      [0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 2, 2, 2, 2], // Row 3
-      [0, 0, 1, 1, 1, 1, 1, 0, 0, 3, 3, 2, 2, 2, 2], // Row 4 (Path from house, near Palm Tree at 7,4)
-      [0, 0, 0, 0, 0, 1, 1, 0, 0, 3, 3, 2, 2, 2, 2], // Row 5
-      [0, 0, 0, 0, 0, 0, 1, 1, 0, 3, 3, 2, 2, 2, 2], // Row 6 (Barrel at 5,6, Player start at 7,6)
-      [0, 0, 0, 0, 0, 0, 1, 1, 0, 3, 3, 2, 2, 2, 2], // Row 7
-      [0, 0, 0, 0, 0, 0, 1, 1, 1, 3, 3, 2, 2, 2, 2], // Row 8 (River Rat at 7,8)
-      [0, 0, 0, 0, 0, 0, 0, 1, 1, 3, 3, 2, 2, 2, 2], // Row 9
-      [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 3, 3, 2, 2, 2], // Row 10 (Trail meets sand beach)
-      [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, 3, 2, 2, 2]  // Row 11
+    const PURE_GRASS_TERRAIN_MAP = [
+      // 0: Pure Grass on land, 3: Sand Beach, 2: Water
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2], // Row 0
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2], // Row 1
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2], // Row 2
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2], // Row 3
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2], // Row 4 (Pure Grass Land)
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2,2], // Row 5
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2,2], // Row 6
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2,2,2], // Row 7
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2,2,2], // Row 8
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2,2,2], // Row 9
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,2,2,2,2,2,2,2,2,2], // Row 10
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,2,2,2,2,2,2,2,2,2], // Row 11
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2], // Row 12
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2], // Row 13
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2], // Row 14
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2], // Row 15
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2], // Row 16
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2,2], // Row 17
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2,2], // Row 18
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2,2], // Row 19
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2], // Row 20
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2], // Row 21
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2], // Row 22
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2]  // Row 23
     ];
 
+    const DIRT_TRAIL_TERRAIN_MAP = [
+      // Optional dirt trail layout preset
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,0,1,0,1,1,1,0,0,3,3,3,2,2,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,1,3,3,3,2,2,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,1,3,3,2,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,1,3,3,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2],
+      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3,3,2,2,2,2,2,2,2]
+    ];
+
+    const DEFAULT_TERRAIN_MAP = PURE_GRASS_TERRAIN_MAP;
     let terrainMap = DEFAULT_TERRAIN_MAP.map(r => [...r]);
 
-    function resetTerrainMap() {
-      terrainMap = DEFAULT_TERRAIN_MAP.map(r => [...r]);
+    // Grass Flow & Gradient Smoothing Parameters
+    const grassParams = {
+      mode: 'meander',      // 'meander' | 'smudge' | 'ribbons' | 'biome'
+      meanderAmp: 35,       // Wave displacement amplitude (0 to 80 px)
+      waveFreq: 1.0,        // Wavelength multiplier (0.3 to 2.5)
+      seamSmudge: 12        // Cross-tile bleed & seam blade smudge in pixels (0 to 24)
+    };
+
+    // Offscreen Canvas for Continuous Smooth Out-of-Sync Sine Wave Flow
+    const FLOW_W = 480;
+    const FLOW_H = 384;
+    const grassFlowCanvas = document.createElement('canvas');
+    grassFlowCanvas.width = FLOW_W;
+    grassFlowCanvas.height = FLOW_H;
+    const grassFlowCtx = grassFlowCanvas.getContext('2d');
+    const flowImageData = grassFlowCtx.createImageData(FLOW_W, FLOW_H);
+
+    function resetTerrainMap(isPure = true) {
+      const src = isPure ? PURE_GRASS_TERRAIN_MAP : DIRT_TRAIL_TERRAIN_MAP;
+      terrainMap = src.map(r => [...r]);
+      updateGrassFlowCanvas();
     }
 
     // Procedural Tile Texture Generation
@@ -664,11 +876,43 @@
       return img;
     }
 
+    // Helper to check if asset image or canvas is loaded and ready
+    function isAssetReady(img) {
+      return img && ((img.complete && img.naturalWidth > 0) || (img.width > 0 && img.height > 0));
+    }
+
+    // Cached shaded bitmap for Black Rat created directly from regular river-rat image
+    let shadedBlackRatCanvas = null;
+    function getShadedBlackRatCanvas(srcImg) {
+      if (shadedBlackRatCanvas) return shadedBlackRatCanvas;
+      if (!srcImg || !srcImg.naturalWidth) return null;
+      const oc = document.createElement('canvas');
+      oc.width = srcImg.naturalWidth;
+      oc.height = srcImg.naturalHeight;
+      const octx = oc.getContext('2d');
+      // Tint bitmap to black: full desaturation, deep shadowing, high contrast
+      octx.filter = 'grayscale(100%) brightness(0.38) contrast(1.3)';
+      octx.drawImage(srcImg, 0, 0);
+      shadedBlackRatCanvas = oc;
+      return oc;
+    }
+
     loadImage('rukiya', 'rukiya-walking-walking-animation-palette.webp');
-    loadImage('river-rat', 'river-rat-walking-armature-unreal-take-baselayer-animation-palette.webp');
+    const ratImg = loadImage('river-rat', 'river-rat-walking-armature-unreal-take-baselayer-animation-palette.webp');
+    ratImg.onload = () => {
+      getShadedBlackRatCanvas(ratImg);
+    };
+    if (ratImg.complete && ratImg.naturalWidth > 0) {
+      getShadedBlackRatCanvas(ratImg);
+    }
+
     loadImage('palm-tree', 'tropical-palm-tree-turntable-palette.webp');
     loadImage('house', 'fishers-house-turntable-palette.webp');
     loadImage('barrel', 'wooden-barrel-turntable-palette.webp');
+    loadImage('wooden-dock', 'wooden-dock-turntable-palette.webp');
+    loadImage('fishers-net', 'fishers-net-turntable-palette.webp');
+    loadImage('rock-pile', 'rock-pile-turntable-palette.webp');
+    loadImage('piranha', 'piranha-turntable-palette.webp');
 
     // Directions: 0: Down/Front, 1: Right, 2: Up/Back, 3: Left
     const DIR_DOWN = 0;
@@ -676,13 +920,34 @@
     const DIR_UP = 2;
     const DIR_LEFT = 3;
 
+    // Helper to set frame coords for turntable/sheet entities
+    function setEntityFrame(ent, frameIdx) {
+      ent.frameIndex = frameIdx;
+      const fw = ent.frameWidth || 128;
+      const fh = ent.frameHeight || 128;
+      const cols = ent.asset === 'rock-pile' ? 4 : 4;
+      ent.frameX = (frameIdx % cols) * fw;
+      ent.frameY = Math.floor(frameIdx / cols) * fh;
+    }
+
     // Player Entity state
     const player = {
+      id: 'player',
+      name: 'Player (Rukiya)',
+      tileX: 7,
+      tileY: 6,
       x: 7 * TILE_SIZE, // Footprint top-left X in pixels
       y: 6 * TILE_SIZE, // Footprint top-left Y in pixels
+      startTileX: 7,
+      startTileY: 6,
+      targetTileX: 7,
+      targetTileY: 6,
+      isStepping: false,
+      stepTime: 0,
+      stepDuration: 0.18, // 0.18s per tile step
       width: 64,       // Footprint width
       height: 64,      // Footprint height
-      speed: 160,      // Pixels per second
+      speed: 160,      // Pixels per second (free movement fallback)
       dir: DIR_DOWN,
       isMoving: false,
       animTime: 0,
@@ -706,16 +971,17 @@
     const entities = [
       {
         id: 'house',
-        name: "Fisher's House",
+        name: "Fisher's Cottage",
         type: 'prop',
-        tileX: 2,
-        tileY: 2,
-        x: 2 * TILE_SIZE,
-        y: 2 * TILE_SIZE,
+        tileX: 5,
+        tileY: 4,
+        x: 5 * TILE_SIZE,
+        y: 4 * TILE_SIZE,
         width: 128,        // 2 tiles wide
         height: 128,       // 2 tiles high (occupies 4 tiles)
         solid: true,
         asset: 'house',
+        frameIndex: 0,
         frameX: 0,
         frameY: 0,
         frameWidth: 128,
@@ -726,19 +992,139 @@
         anchorY: 256,
         anchorPreset: 'bottom-center'
       },
+      // Barrels tucked under the eaves of the house (Row 3, under roof)
       {
-        id: 'palm-tree',
-        name: 'Tropical Palm Tree',
+        id: 'barrel-house-left',
+        name: 'Wooden Barrel (House West Eaves)',
         type: 'prop',
-        tileX: 7,
-        tileY: 4,
-        x: 7 * TILE_SIZE,
-        y: 4 * TILE_SIZE,
+        tileX: 4,
+        tileY: 3,
+        x: 4 * TILE_SIZE,
+        y: 3 * TILE_SIZE,
         width: 64,
         height: 64,
         solid: true,
-        asset: 'palm-tree',
-        frameX: 0, // Front view
+        asset: 'barrel',
+        frameIndex: 0,
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 64,
+        renderHeight: 64,
+        anchorX: 32,
+        anchorY: 64,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'barrel-house-right',
+        name: 'Wooden Barrel (House East Eaves)',
+        type: 'prop',
+        tileX: 7,
+        tileY: 3,
+        x: 7 * TILE_SIZE,
+        y: 3 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'barrel',
+        frameIndex: 0,
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 64,
+        renderHeight: 64,
+        anchorX: 32,
+        anchorY: 64,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'barrel-path',
+        name: 'Wooden Barrel (Trail Crossroads)',
+        type: 'prop',
+        tileX: 10,
+        tileY: 7,
+        x: 10 * TILE_SIZE,
+        y: 7 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'barrel',
+        frameIndex: 0,
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 64,
+        renderHeight: 64,
+        anchorX: 32,
+        anchorY: 64,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'barrel-beach',
+        name: 'Wooden Barrel (Shoreline Sand)',
+        type: 'prop',
+        tileX: 19,
+        tileY: 10,
+        x: 19 * TILE_SIZE,
+        y: 10 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'barrel',
+        frameIndex: 0,
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 64,
+        renderHeight: 64,
+        anchorX: 32,
+        anchorY: 64,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'barrel-dock',
+        name: 'Wooden Barrel (Pier Mooring)',
+        type: 'prop',
+        tileX: 24,
+        tileY: 10,
+        x: 24 * TILE_SIZE,
+        y: 10 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'barrel',
+        frameIndex: 0,
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 64,
+        renderHeight: 64,
+        anchorX: 32,
+        anchorY: 64,
+        anchorPreset: 'bottom-center'
+      },
+      // Wooden Dock Pier (Walkable over water and beach)
+      {
+        id: 'dock-approach',
+        name: 'Wooden Dock (Beach Approach)',
+        type: 'prop',
+        isDock: true,
+        tileX: 20,
+        tileY: 11,
+        x: 20 * TILE_SIZE,
+        y: 11 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: false,
+        walkable: true,
+        asset: 'wooden-dock',
+        frameIndex: 3,
+        frameX: 3 * 128,
         frameY: 0,
         frameWidth: 128,
         frameHeight: 128,
@@ -749,35 +1135,495 @@
         anchorPreset: 'bottom-center'
       },
       {
-        id: 'barrel',
-        name: 'Wooden Barrel',
+        id: 'dock-sec-1',
+        name: 'Wooden Dock (Pier Section 1)',
         type: 'prop',
-        tileX: 5,
-        tileY: 6,
-        x: 5 * TILE_SIZE,
-        y: 6 * TILE_SIZE,
+        isDock: true,
+        tileX: 21,
+        tileY: 11,
+        x: 21 * TILE_SIZE,
+        y: 11 * TILE_SIZE,
         width: 64,
         height: 64,
-        solid: true,
-        asset: 'barrel',
+        solid: false,
+        walkable: true,
+        asset: 'wooden-dock',
+        frameIndex: 3,
+        frameX: 3 * 128,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 128,
+        renderHeight: 128,
+        anchorX: 64,
+        anchorY: 128,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'dock-sec-2',
+        name: 'Wooden Dock (Pier Section 2)',
+        type: 'prop',
+        isDock: true,
+        tileX: 22,
+        tileY: 11,
+        x: 22 * TILE_SIZE,
+        y: 11 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: false,
+        walkable: true,
+        asset: 'wooden-dock',
+        frameIndex: 3,
+        frameX: 3 * 128,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 128,
+        renderHeight: 128,
+        anchorX: 64,
+        anchorY: 128,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'dock-sec-3',
+        name: 'Wooden Dock (Pier Section 3)',
+        type: 'prop',
+        isDock: true,
+        tileX: 23,
+        tileY: 11,
+        x: 23 * TILE_SIZE,
+        y: 11 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: false,
+        walkable: true,
+        asset: 'wooden-dock',
+        frameIndex: 3,
+        frameX: 3 * 128,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 128,
+        renderHeight: 128,
+        anchorX: 64,
+        anchorY: 128,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'dock-end',
+        name: 'Wooden Dock (Pier T-End)',
+        type: 'prop',
+        isDock: true,
+        tileX: 24,
+        tileY: 11,
+        x: 24 * TILE_SIZE,
+        y: 11 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: false,
+        walkable: true,
+        asset: 'wooden-dock',
+        frameIndex: 0,
         frameX: 0,
         frameY: 0,
         frameWidth: 128,
         frameHeight: 128,
-        renderWidth: 64,   // Half size
+        renderWidth: 128,
+        renderHeight: 128,
+        anchorX: 64,
+        anchorY: 128,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'dock-moor',
+        name: 'Wooden Dock (Mooring Extension)',
+        type: 'prop',
+        isDock: true,
+        tileX: 24,
+        tileY: 10,
+        x: 24 * TILE_SIZE,
+        y: 10 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: false,
+        walkable: true,
+        asset: 'wooden-dock',
+        frameIndex: 6,
+        frameX: 2 * 128,
+        frameY: 1 * 128,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 128,
+        renderHeight: 128,
+        anchorX: 64,
+        anchorY: 128,
+        anchorPreset: 'bottom-center'
+      },
+      // Fisher's Nets
+      {
+        id: 'net-beach',
+        name: "Fisher's Net (Beach Drying)",
+        type: 'prop',
+        tileX: 19,
+        tileY: 13,
+        x: 19 * TILE_SIZE,
+        y: 13 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: false,
+        asset: 'fishers-net',
+        frameIndex: 0,
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 128,
+        renderHeight: 128,
+        anchorX: 64,
+        anchorY: 128,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'net-yard',
+        name: "Fisher's Net (Cottage Yard)",
+        type: 'prop',
+        tileX: 8,
+        tileY: 5,
+        x: 8 * TILE_SIZE,
+        y: 5 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: false,
+        asset: 'fishers-net',
+        frameIndex: 2,
+        frameX: 2 * 128,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 128,
+        renderHeight: 128,
+        anchorX: 64,
+        anchorY: 128,
+        anchorPreset: 'bottom-center'
+      },
+      // Rock Piles (Solid natural obstacles)
+      {
+        id: 'rock-coast-1',
+        name: 'Rock Pile (Coastline Crags)',
+        type: 'prop',
+        tileX: 18,
+        tileY: 4,
+        x: 18 * TILE_SIZE,
+        y: 4 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'rock-pile',
+        frameIndex: 0,
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 64,
+        frameHeight: 64,
+        renderWidth: 64,
         renderHeight: 64,
         anchorX: 32,
         anchorY: 64,
         anchorPreset: 'bottom-center'
       },
       {
-        id: 'river-rat-npc',
-        name: 'River Rat (NPC)',
-        type: 'npc',
-        tileX: 7,
+        id: 'rock-coast-2',
+        name: 'Rock Pile (Beach Shallows)',
+        type: 'prop',
+        tileX: 21,
+        tileY: 5,
+        x: 21 * TILE_SIZE,
+        y: 5 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'rock-pile',
+        frameIndex: 2,
+        frameX: 2 * 64,
+        frameY: 0,
+        frameWidth: 64,
+        frameHeight: 64,
+        renderWidth: 64,
+        renderHeight: 64,
+        anchorX: 32,
+        anchorY: 64,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'rock-south',
+        name: 'Rock Pile (South Shore)',
+        type: 'prop',
+        tileX: 19,
+        tileY: 17,
+        x: 19 * TILE_SIZE,
+        y: 17 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'rock-pile',
+        frameIndex: 4,
+        frameX: 0,
+        frameY: 64,
+        frameWidth: 64,
+        frameHeight: 64,
+        renderWidth: 64,
+        renderHeight: 64,
+        anchorX: 32,
+        anchorY: 64,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'rock-inland',
+        name: 'Rock Pile (Inland Crags)',
+        type: 'prop',
+        tileX: 3,
+        tileY: 18,
+        x: 3 * TILE_SIZE,
+        y: 18 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'rock-pile',
+        frameIndex: 1,
+        frameX: 64,
+        frameY: 0,
+        frameWidth: 64,
+        frameHeight: 64,
+        renderWidth: 64,
+        renderHeight: 64,
+        anchorX: 32,
+        anchorY: 64,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'rock-cove',
+        name: 'Rock Pile (Cove Boulders)',
+        type: 'prop',
+        tileX: 22,
+        tileY: 21,
+        x: 22 * TILE_SIZE,
+        y: 21 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'rock-pile',
+        frameIndex: 3,
+        frameX: 3 * 64,
+        frameY: 0,
+        frameWidth: 64,
+        frameHeight: 64,
+        renderWidth: 64,
+        renderHeight: 64,
+        anchorX: 32,
+        anchorY: 64,
+        anchorPreset: 'bottom-center'
+      },
+      // Palm Trees (Scaled up to 256x256)
+      {
+        id: 'palm-tree-1',
+        name: 'Tropical Palm Tree (West Grove)',
+        type: 'prop',
+        tileX: 2,
+        tileY: 2,
+        x: 2 * TILE_SIZE,
+        y: 2 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'palm-tree',
+        frameIndex: 0,
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 256,
+        renderHeight: 256,
+        anchorX: 128,
+        anchorY: 256,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'palm-tree-2',
+        name: 'Tropical Palm Tree (North Inland)',
+        type: 'prop',
+        tileX: 10,
+        tileY: 2,
+        x: 10 * TILE_SIZE,
+        y: 2 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'palm-tree',
+        frameIndex: 0,
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 256,
+        renderHeight: 256,
+        anchorX: 128,
+        anchorY: 256,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'palm-tree-3',
+        name: 'Tropical Palm Tree (Trail Palm)',
+        type: 'prop',
+        tileX: 13,
+        tileY: 7,
+        x: 13 * TILE_SIZE,
+        y: 7 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'palm-tree',
+        frameIndex: 0,
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 256,
+        renderHeight: 256,
+        anchorX: 128,
+        anchorY: 256,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'palm-tree-4',
+        name: 'Tropical Palm Tree (Coastal Headland)',
+        type: 'prop',
+        tileX: 17,
         tileY: 8,
-        x: 7 * TILE_SIZE,
+        x: 17 * TILE_SIZE,
         y: 8 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'palm-tree',
+        frameIndex: 0,
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 256,
+        renderHeight: 256,
+        anchorX: 128,
+        anchorY: 256,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'palm-tree-5',
+        name: 'Tropical Palm Tree (Southwest Oasis)',
+        type: 'prop',
+        tileX: 2,
+        tileY: 12,
+        x: 2 * TILE_SIZE,
+        y: 12 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'palm-tree',
+        frameIndex: 0,
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 256,
+        renderHeight: 256,
+        anchorX: 128,
+        anchorY: 256,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'palm-tree-6',
+        name: 'Tropical Palm Tree (South Clearing)',
+        type: 'prop',
+        tileX: 8,
+        tileY: 15,
+        x: 8 * TILE_SIZE,
+        y: 15 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'palm-tree',
+        frameIndex: 0,
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 256,
+        renderHeight: 256,
+        anchorX: 128,
+        anchorY: 256,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'palm-tree-7',
+        name: 'Tropical Palm Tree (South Beach Palm)',
+        type: 'prop',
+        tileX: 16,
+        tileY: 18,
+        x: 16 * TILE_SIZE,
+        y: 18 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'palm-tree',
+        frameIndex: 0,
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 256,
+        renderHeight: 256,
+        anchorX: 128,
+        anchorY: 256,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'palm-tree-8',
+        name: 'Tropical Palm Tree (Northeast Bluff)',
+        type: 'prop',
+        tileX: 20,
+        tileY: 2,
+        x: 20 * TILE_SIZE,
+        y: 2 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'palm-tree',
+        frameIndex: 0,
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 256,
+        renderHeight: 256,
+        anchorX: 128,
+        anchorY: 256,
+        anchorPreset: 'bottom-center'
+      },
+      // NPCs: Land (Rats) & Water (Piranhas)
+      {
+        id: 'river-rat-npc',
+        name: 'River Rat (Brown NPC)',
+        type: 'npc',
+        npcType: 'rat',
+        tileX: 9,
+        tileY: 8,
+        x: 9 * TILE_SIZE,
+        y: 8 * TILE_SIZE,
+        startTileX: 9,
+        startTileY: 8,
+        targetTileX: 9,
+        targetTileY: 8,
+        isStepping: false,
+        stepTime: 0,
+        stepDuration: 0.32,
         width: 64,
         height: 64,
         solid: false,
@@ -786,7 +1632,7 @@
         fps: 8,
         dir: DIR_DOWN,
         speed: 68,
-        wanderState: 'idle_center', // 'idle_center', 'look_right', 'look_left', 'walking'
+        wanderState: 'idle_center',
         stateTimer: 1.2,
         isMoving: false,
         frameWidth: 128,
@@ -795,6 +1641,119 @@
         renderHeight: 128,
         anchorX: 64,
         anchorY: 64,       // Center anchor for quadruped mid-body
+        anchorPreset: 'center'
+      },
+      {
+        id: 'black-rat-npc',
+        name: 'Black Rat (Agile NPC - 60% Size)',
+        type: 'npc',
+        npcType: 'rat',
+        tileX: 3,
+        tileY: 8,
+        x: 3 * TILE_SIZE,
+        y: 8 * TILE_SIZE,
+        startTileX: 3,
+        startTileY: 8,
+        targetTileX: 3,
+        targetTileY: 8,
+        isStepping: false,
+        stepTime: 0,
+        stepDuration: 0.22,
+        width: 64,
+        height: 64,
+        solid: false,
+        asset: 'river-rat',
+        tint: 'black',
+        animTime: 0,
+        fps: 9,
+        dir: DIR_RIGHT,
+        speed: 84, // Nimble, quick scurrying pace
+        wanderState: 'idle_center',
+        stateTimer: 0.9,
+        isMoving: false,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 76,   // 60% of 128px
+        renderHeight: 76,
+        anchorX: 38,       // Half of 76
+        anchorY: 38,
+        anchorPreset: 'center'
+      },
+      // Piranha NPCs swimming in the water
+      {
+        id: 'piranha-npc-1',
+        name: 'Piranha (Cove Water NPC)',
+        type: 'npc',
+        npcType: 'piranha',
+        tileX: 25,
+        tileY: 7,
+        x: 25 * TILE_SIZE,
+        y: 7 * TILE_SIZE,
+        startTileX: 25,
+        startTileY: 7,
+        targetTileX: 25,
+        targetTileY: 7,
+        isStepping: false,
+        stepTime: 0,
+        stepDuration: 0.35,
+        width: 64,
+        height: 64,
+        solid: false,
+        asset: 'piranha',
+        frameIndex: 9,     // 270° face left
+        swimFrame: 9,
+        bobOffset: 0,
+        dir: DIR_LEFT,
+        animTime: 0,
+        fps: 6,
+        speed: 60,
+        wanderState: 'swimming',
+        stateTimer: 1.8,
+        isMoving: true,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 128,
+        renderHeight: 128,
+        anchorX: 64,
+        anchorY: 64,       // Center anchor in water
+        anchorPreset: 'center'
+      },
+      {
+        id: 'piranha-npc-2',
+        name: 'Piranha (Deep Sea Water NPC)',
+        type: 'npc',
+        npcType: 'piranha',
+        tileX: 26,
+        tileY: 15,
+        x: 26 * TILE_SIZE,
+        y: 15 * TILE_SIZE,
+        startTileX: 26,
+        startTileY: 15,
+        targetTileX: 26,
+        targetTileY: 15,
+        isStepping: false,
+        stepTime: 0,
+        stepDuration: 0.40,
+        width: 64,
+        height: 64,
+        solid: false,
+        asset: 'piranha',
+        frameIndex: 6,     // 180° face up
+        swimFrame: 6,
+        bobOffset: 1.6,
+        dir: DIR_UP,
+        animTime: 0,
+        fps: 6,
+        speed: 52,
+        wanderState: 'swimming',
+        stateTimer: 2.2,
+        isMoving: true,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 128,
+        renderHeight: 128,
+        anchorX: 64,
+        anchorY: 64,       // Center anchor in water
         anchorPreset: 'center'
       }
     ];
@@ -811,15 +1770,55 @@
       keys[e.key.toLowerCase()] = false;
     });
 
-    // Collision Detection between AABB footprints
-    function checkCollision(targetX, targetY, selfWidth, selfHeight) {
+    // Check if a tile is a wooden dock pier
+    function isTileDock(tx, ty) {
+      return entities.some(e => e.isDock && e.tileX === tx && e.tileY === ty);
+    }
+
+    // Discrete tile walkability check for grid-aligned movement
+    function isTileWalkable(tx, ty, isWaterCreature = false) {
+      // Map boundary check
+      if (tx < 0 || tx >= GRID_COLS || ty < 0 || ty >= GRID_ROWS) return false;
+
+      // Solid obstacle collisions
+      for (const ent of entities) {
+        if (!ent.solid) continue;
+        if (ent.id === 'house') {
+          // Fisher's cottage footprint: 2x2 tiles
+          if (tx >= ent.tileX && tx < ent.tileX + 2 && ty >= ent.tileY && ty < ent.tileY + 2) {
+            return false;
+          }
+        } else {
+          if (ent.tileX === tx && ent.tileY === ty) {
+            return false;
+          }
+        }
+      }
+
+      const terrain = terrainMap[ty][tx];
+
+      if (isWaterCreature) {
+        // Piranhas must stay in water!
+        return terrain === TERRAIN_WATER;
+      } else {
+        // Land creatures (Player & Rats)
+        if (debug.waterSolid && terrain === TERRAIN_WATER) {
+          // Wooden dock sections over water are walkable!
+          return isTileDock(tx, ty);
+        }
+        return true;
+      }
+    }
+
+    // Continuous AABB collision detection (used for free-movement fallback)
+    function checkCollision(targetX, targetY, selfWidth, selfHeight, isWaterCreature = false) {
       if (!debug.collision) return false;
 
       // Map boundary collision
       if (targetX < 0 || targetX + selfWidth > canvas.width) return true;
       if (targetY < 0 || targetY + selfHeight > canvas.height) return true;
 
-      // Obstacle collision (using a slightly forgiving 48x48 core box)
+      // Obstacle collision (using a 48x48 core box)
       const pad = 8;
       const box = {
         left: targetX + pad,
@@ -845,7 +1844,7 @@
         }
       }
 
-      // Water collision if enabled
+      // Water collision
       if (debug.waterSolid) {
         const minTx = Math.max(0, Math.floor(box.left / TILE_SIZE));
         const maxTx = Math.min(GRID_COLS - 1, Math.floor(box.right / TILE_SIZE));
@@ -854,8 +1853,12 @@
 
         for (let ty = minTy; ty <= maxTy; ty++) {
           for (let tx = minTx; tx <= maxTx; tx++) {
-            if (terrainMap[ty][tx] === TERRAIN_WATER) {
-              return true;
+            if (isWaterCreature) {
+              if (terrainMap[ty][tx] !== TERRAIN_WATER) return true;
+            } else {
+              if (terrainMap[ty][tx] === TERRAIN_WATER && !isTileDock(tx, ty)) {
+                return true;
+              }
             }
           }
         }
@@ -864,45 +1867,110 @@
       return false;
     }
 
+    // Helper to start a player step to an adjacent tile
+    function tryStartPlayerGridStep() {
+      let dx = 0;
+      let dy = 0;
+      if (keys['w'] || keys['arrowup']) dy = -1;
+      else if (keys['s'] || keys['arrowdown']) dy = 1;
+      else if (keys['a'] || keys['arrowleft']) dx = -1;
+      else if (keys['d'] || keys['arrowright']) dx = 1;
+
+      if (dx === 0 && dy === 0) return false;
+
+      // Turn to face the direction
+      if (dy > 0) player.dir = DIR_DOWN;
+      else if (dy < 0) player.dir = DIR_UP;
+      else if (dx > 0) player.dir = DIR_RIGHT;
+      else if (dx < 0) player.dir = DIR_LEFT;
+
+      const nextTx = player.tileX + dx;
+      const nextTy = player.tileY + dy;
+
+      if (isTileWalkable(nextTx, nextTy, false)) {
+        player.isStepping = true;
+        player.stepTime = 0;
+        player.startTileX = player.tileX;
+        player.startTileY = player.tileY;
+        player.targetTileX = nextTx;
+        player.targetTileY = nextTy;
+        player.isMoving = true;
+        return true;
+      }
+      return false;
+    }
+
     // Update Player Movement & State
     function updatePlayer(dt) {
-      let vx = 0;
-      let vy = 0;
+      if (debug.snapToGrid) {
+        // --- Snap To Grid Movement (1 Tile per Step) ---
+        if (player.isStepping) {
+          player.stepTime += dt;
+          const t = Math.min(1, player.stepTime / player.stepDuration);
+          player.x = Math.round((player.startTileX + (player.targetTileX - player.startTileX) * t) * TILE_SIZE);
+          player.y = Math.round((player.startTileY + (player.targetTileY - player.startTileY) * t) * TILE_SIZE);
+          player.animTime += dt;
+          player.isMoving = true;
 
-      if (keys['w'] || keys['arrowup']) vy -= 1;
-      if (keys['s'] || keys['arrowdown']) vy += 1;
-      if (keys['a'] || keys['arrowleft']) vx -= 1;
-      if (keys['d'] || keys['arrowright']) vx += 1;
+          if (t >= 1) {
+            // Strictly snap to destination tile
+            player.tileX = player.targetTileX;
+            player.tileY = player.targetTileY;
+            player.x = player.tileX * TILE_SIZE;
+            player.y = player.tileY * TILE_SIZE;
+            player.isStepping = false;
 
-      if (vx !== 0 || vy !== 0) {
-        player.isMoving = true;
-        player.animTime += dt;
-
-        // Determine face direction
-        if (vy > 0) player.dir = DIR_DOWN;
-        else if (vy < 0) player.dir = DIR_UP;
-        else if (vx > 0) player.dir = DIR_RIGHT;
-        else if (vx < 0) player.dir = DIR_LEFT;
-
-        // Normalize diagonal speed
-        let moveDist = player.speed * dt;
-        if (vx !== 0 && vy !== 0) {
-          moveDist *= 0.7071;
-        }
-
-        const nextX = player.x + vx * moveDist;
-        const nextY = player.y + vy * moveDist;
-
-        // Slide along walls (separate X and Y checks)
-        if (!checkCollision(nextX, player.y, player.width, player.height)) {
-          player.x = nextX;
-        }
-        if (!checkCollision(player.x, nextY, player.width, player.height)) {
-          player.y = nextY;
+            // Immediately check for next step if key is held down
+            const chained = tryStartPlayerGridStep();
+            if (!chained) {
+              player.isMoving = false;
+              player.animTime = 0;
+            }
+          }
+        } else {
+          const started = tryStartPlayerGridStep();
+          if (!started) {
+            player.isMoving = false;
+            player.animTime = 0;
+          }
         }
       } else {
-        player.isMoving = false;
-        player.animTime = 0;
+        // --- Free Continuous Movement Fallback ---
+        let vx = 0;
+        let vy = 0;
+
+        if (keys['w'] || keys['arrowup']) vy -= 1;
+        if (keys['s'] || keys['arrowdown']) vy += 1;
+        if (keys['a'] || keys['arrowleft']) vx -= 1;
+        if (keys['d'] || keys['arrowright']) vx += 1;
+
+        if (vx !== 0 || vy !== 0) {
+          player.isMoving = true;
+          player.animTime += dt;
+
+          if (vy > 0) player.dir = DIR_DOWN;
+          else if (vy < 0) player.dir = DIR_UP;
+          else if (vx > 0) player.dir = DIR_RIGHT;
+          else if (vx < 0) player.dir = DIR_LEFT;
+
+          let moveDist = player.speed * dt;
+          if (vx !== 0 && vy !== 0) moveDist *= 0.7071;
+
+          const nextX = player.x + vx * moveDist;
+          const nextY = player.y + vy * moveDist;
+
+          if (!checkCollision(nextX, player.y, player.width, player.height, false)) {
+            player.x = nextX;
+          }
+          if (!checkCollision(player.x, nextY, player.width, player.height, false)) {
+            player.y = nextY;
+          }
+          player.tileX = Math.round(player.x / TILE_SIZE);
+          player.tileY = Math.round(player.y / TILE_SIZE);
+        } else {
+          player.isMoving = false;
+          player.animTime = 0;
+        }
       }
     }
 
@@ -916,87 +1984,436 @@
       return { col: 0, row: 4 };
     }
 
-    // River Rat NPC wandering state machine
-    function updateRiverRatNPC(dt) {
-      const rat = entities.find(e => e.id === 'river-rat-npc');
-      if (!rat) return;
+    // Generic Rat NPC wandering state machine (Brown and Black rat)
+    function updateRatNPC(rat, dt) {
+      if (debug.snapToGrid) {
+        // --- Snap-to-Grid Rat Movement ---
+        if (rat.isStepping) {
+          rat.stepTime += dt;
+          const t = Math.min(1, rat.stepTime / rat.stepDuration);
+          rat.x = Math.round((rat.startTileX + (rat.targetTileX - rat.startTileX) * t) * TILE_SIZE);
+          rat.y = Math.round((rat.startTileY + (rat.targetTileY - rat.startTileY) * t) * TILE_SIZE);
+          rat.animTime += dt;
+          rat.isMoving = true;
 
-      rat.stateTimer -= dt;
+          if (t >= 1) {
+            rat.tileX = rat.targetTileX;
+            rat.tileY = rat.targetTileY;
+            rat.x = rat.tileX * TILE_SIZE;
+            rat.y = rat.tileY * TILE_SIZE;
+            rat.isStepping = false;
+            rat.stepsRemaining = (rat.stepsRemaining || 1) - 1;
 
-      if (rat.wanderState === 'walking') {
-        rat.isMoving = true;
-        rat.animTime += dt;
-
-        let vx = 0, vy = 0;
-        if (rat.dir === DIR_DOWN) vy = 1;
-        else if (rat.dir === DIR_UP) vy = -1;
-        else if (rat.dir === DIR_RIGHT) vx = 1;
-        else if (rat.dir === DIR_LEFT) vx = -1;
-
-        const moveDist = rat.speed * dt;
-        const nextX = rat.x + vx * moveDist;
-        const nextY = rat.y + vy * moveDist;
-
-        if (!checkCollision(nextX, nextY, rat.width, rat.height)) {
-          rat.x = nextX;
-          rat.y = nextY;
-        } else {
-          // Bumping an obstacle stops walking early
-          rat.stateTimer = 0;
-        }
-
-        if (rat.stateTimer <= 0) {
-          rat.isMoving = false;
-          rat.animTime = 0;
-          rat.wanderState = 'idle_center';
-          rat.stateTimer = 0.9 + Math.random() * 0.8; // Pause briefly
-        }
-      } else if (rat.wanderState === 'idle_center') {
-        rat.isMoving = false;
-        if (rat.stateTimer <= 0) {
-          // Turn head to one side
-          rat.wanderState = Math.random() < 0.5 ? 'look_right' : 'look_left';
-          rat.stateTimer = 0.7 + Math.random() * 0.5;
-        }
-      } else if (rat.wanderState === 'look_right') {
-        rat.isMoving = false;
-        if (rat.stateTimer <= 0) {
-          // Turn head to the opposite side
-          rat.wanderState = 'look_left';
-          rat.stateTimer = 0.7 + Math.random() * 0.5;
-        }
-      } else if (rat.wanderState === 'look_left') {
-        rat.isMoving = false;
-        if (rat.stateTimer <= 0) {
-          // Pick a new open direction and walk a few steps
-          const candidates = [DIR_DOWN, DIR_RIGHT, DIR_UP, DIR_LEFT];
-          candidates.sort(() => Math.random() - 0.5);
-
-          let chosenDir = candidates[0];
-          for (const d of candidates) {
-            let tvx = 0, tvy = 0;
-            if (d === DIR_DOWN) tvy = 1;
-            else if (d === DIR_UP) tvy = -1;
-            else if (d === DIR_RIGHT) tvx = 1;
-            else if (d === DIR_LEFT) tvx = -1;
-
-            if (!checkCollision(rat.x + tvx * 32, rat.y + tvy * 32, rat.width, rat.height)) {
-              chosenDir = d;
-              break;
+            if (rat.stepsRemaining <= 0) {
+              rat.isMoving = false;
+              rat.animTime = 0;
+              rat.wanderState = 'idle_center';
+              rat.stateTimer = 0.8 + Math.random() * 0.9;
             }
           }
+        } else if (rat.wanderState === 'walking') {
+          let dx = 0, dy = 0;
+          if (rat.dir === DIR_DOWN) dy = 1;
+          else if (rat.dir === DIR_UP) dy = -1;
+          else if (rat.dir === DIR_RIGHT) dx = 1;
+          else if (rat.dir === DIR_LEFT) dx = -1;
 
-          rat.dir = chosenDir;
-          rat.wanderState = 'walking';
-          rat.stateTimer = 1.2 + Math.random() * 1.5; // Walk for 1.2 - 2.7s
+          const nextTx = rat.tileX + dx;
+          const nextTy = rat.tileY + dy;
+
+          if (isTileWalkable(nextTx, nextTy, false)) {
+            rat.isStepping = true;
+            rat.stepTime = 0;
+            rat.startTileX = rat.tileX;
+            rat.startTileY = rat.tileY;
+            rat.targetTileX = nextTx;
+            rat.targetTileY = nextTy;
+            rat.isMoving = true;
+          } else {
+            rat.isMoving = false;
+            rat.animTime = 0;
+            rat.wanderState = 'idle_center';
+            rat.stateTimer = 0.6;
+          }
+        } else if (rat.wanderState === 'idle_center') {
+          rat.isMoving = false;
+          rat.stateTimer -= dt;
+          if (rat.stateTimer <= 0) {
+            rat.wanderState = Math.random() < 0.5 ? 'look_right' : 'look_left';
+            rat.stateTimer = 0.6 + Math.random() * 0.5;
+          }
+        } else if (rat.wanderState === 'look_right') {
+          rat.isMoving = false;
+          rat.stateTimer -= dt;
+          if (rat.stateTimer <= 0) {
+            rat.wanderState = 'look_left';
+            rat.stateTimer = 0.6 + Math.random() * 0.5;
+          }
+        } else if (rat.wanderState === 'look_left') {
+          rat.isMoving = false;
+          rat.stateTimer -= dt;
+          if (rat.stateTimer <= 0) {
+            const candidates = [DIR_DOWN, DIR_RIGHT, DIR_UP, DIR_LEFT];
+            candidates.sort(() => Math.random() - 0.5);
+
+            let chosenDir = candidates[0];
+            for (const d of candidates) {
+              let tdx = 0, tdy = 0;
+              if (d === DIR_DOWN) tdy = 1;
+              else if (d === DIR_UP) tdy = -1;
+              else if (d === DIR_RIGHT) tdx = 1;
+              else if (d === DIR_LEFT) tdx = -1;
+
+              if (isTileWalkable(rat.tileX + tdx, rat.tileY + tdy, false)) {
+                chosenDir = d;
+                break;
+              }
+            }
+
+            rat.dir = chosenDir;
+            rat.wanderState = 'walking';
+            rat.stepsRemaining = 1 + Math.floor(Math.random() * 3);
+          }
+        }
+      } else {
+        // Free movement fallback for rat
+        rat.stateTimer -= dt;
+        if (rat.wanderState === 'walking') {
+          rat.isMoving = true;
+          rat.animTime += dt;
+          let vx = 0, vy = 0;
+          if (rat.dir === DIR_DOWN) vy = 1;
+          else if (rat.dir === DIR_UP) vy = -1;
+          else if (rat.dir === DIR_RIGHT) vx = 1;
+          else if (rat.dir === DIR_LEFT) vx = -1;
+
+          const nextX = rat.x + vx * rat.speed * dt;
+          const nextY = rat.y + vy * rat.speed * dt;
+
+          if (!checkCollision(nextX, nextY, rat.width, rat.height, false)) {
+            rat.x = nextX;
+            rat.y = nextY;
+            rat.tileX = Math.round(rat.x / TILE_SIZE);
+            rat.tileY = Math.round(rat.y / TILE_SIZE);
+          } else {
+            rat.stateTimer = 0;
+          }
+
+          if (rat.stateTimer <= 0) {
+            rat.isMoving = false;
+            rat.animTime = 0;
+            rat.wanderState = 'idle_center';
+            rat.stateTimer = 0.8 + Math.random() * 0.9;
+          }
+        } else if (rat.wanderState === 'idle_center') {
+          rat.isMoving = false;
+          if (rat.stateTimer <= 0) {
+            rat.wanderState = Math.random() < 0.5 ? 'look_right' : 'look_left';
+            rat.stateTimer = 0.6 + Math.random() * 0.5;
+          }
+        } else if (rat.wanderState === 'look_right') {
+          rat.isMoving = false;
+          if (rat.stateTimer <= 0) {
+            rat.wanderState = 'look_left';
+            rat.stateTimer = 0.6 + Math.random() * 0.5;
+          }
+        } else if (rat.wanderState === 'look_left') {
+          rat.isMoving = false;
+          if (rat.stateTimer <= 0) {
+            rat.dir = Math.floor(Math.random() * 4);
+            rat.wanderState = 'walking';
+            rat.stateTimer = 1.1 + Math.random() * 1.5;
+          }
         }
       }
     }
 
-    // Render floor grid with procedural terrain, grass gradients, and animated water
+    // Piranha Water NPC autonomous swimming state machine
+    function updatePiranhaNPC(piranha, dt) {
+      piranha.animTime += dt;
+
+      // Base turntable frame according to swimming direction
+      // 0: Down (0°), 3: Right (90°), 6: Up (180°), 9: Left (270°)
+      const baseFrame = piranha.dir === DIR_DOWN ? 0 :
+                        (piranha.dir === DIR_RIGHT ? 3 :
+                        (piranha.dir === DIR_UP ? 6 : 9));
+
+      // Lifelike swimming tail wiggle: oscillate ±1 turntable angle
+      const wiggleSpeed = piranha.isMoving ? 10 : 5;
+      const wiggle = Math.round(Math.sin(piranha.animTime * wiggleSpeed) * 0.8);
+      piranha.swimFrame = (baseFrame + wiggle + 12) % 12;
+      piranha.frameIndex = piranha.swimFrame;
+      setEntityFrame(piranha, piranha.swimFrame);
+
+      if (debug.snapToGrid) {
+        if (piranha.isStepping) {
+          piranha.stepTime += dt;
+          const t = Math.min(1, piranha.stepTime / piranha.stepDuration);
+          piranha.x = Math.round((piranha.startTileX + (piranha.targetTileX - piranha.startTileX) * t) * TILE_SIZE);
+          piranha.y = Math.round((piranha.startTileY + (piranha.targetTileY - piranha.startTileY) * t) * TILE_SIZE);
+          piranha.isMoving = true;
+
+          if (t >= 1) {
+            piranha.tileX = piranha.targetTileX;
+            piranha.tileY = piranha.targetTileY;
+            piranha.x = piranha.tileX * TILE_SIZE;
+            piranha.y = piranha.tileY * TILE_SIZE;
+            piranha.isStepping = false;
+            piranha.stepsRemaining = (piranha.stepsRemaining || 1) - 1;
+
+            if (piranha.stepsRemaining <= 0) {
+              piranha.isMoving = false;
+              piranha.wanderState = 'hover';
+              piranha.stateTimer = 1.2 + Math.random() * 1.5; // Hover gently
+            }
+          }
+        } else if (piranha.wanderState === 'swimming') {
+          let dx = 0, dy = 0;
+          if (piranha.dir === DIR_DOWN) dy = 1;
+          else if (piranha.dir === DIR_UP) dy = -1;
+          else if (piranha.dir === DIR_RIGHT) dx = 1;
+          else if (piranha.dir === DIR_LEFT) dx = -1;
+
+          const nextTx = piranha.tileX + dx;
+          const nextTy = piranha.tileY + dy;
+
+          if (isTileWalkable(nextTx, nextTy, true)) {
+            piranha.isStepping = true;
+            piranha.stepTime = 0;
+            piranha.startTileX = piranha.tileX;
+            piranha.startTileY = piranha.tileY;
+            piranha.targetTileX = nextTx;
+            piranha.targetTileY = nextTy;
+            piranha.isMoving = true;
+          } else {
+            piranha.isMoving = false;
+            piranha.wanderState = 'hover';
+            piranha.stateTimer = 0.8;
+          }
+        } else if (piranha.wanderState === 'hover') {
+          piranha.isMoving = false;
+          piranha.stateTimer -= dt;
+          if (piranha.stateTimer <= 0) {
+            // Pick an open water tile direction
+            const directions = [DIR_DOWN, DIR_RIGHT, DIR_UP, DIR_LEFT];
+            directions.sort(() => Math.random() - 0.5);
+
+            let chosenDir = null;
+            for (const d of directions) {
+              let tdx = 0, tdy = 0;
+              if (d === DIR_DOWN) tdy = 1;
+              else if (d === DIR_UP) tdy = -1;
+              else if (d === DIR_RIGHT) tdx = 1;
+              else if (d === DIR_LEFT) tdx = -1;
+
+              if (isTileWalkable(piranha.tileX + tdx, piranha.tileY + tdy, true)) {
+                chosenDir = d;
+                break;
+              }
+            }
+
+            if (chosenDir !== null) {
+              piranha.dir = chosenDir;
+              piranha.wanderState = 'swimming';
+              piranha.stepsRemaining = 1 + Math.floor(Math.random() * 4); // Cruise 1 to 4 tiles
+            } else {
+              piranha.stateTimer = 1.0;
+            }
+          }
+        }
+      } else {
+        // Continuous free swim
+        piranha.stateTimer -= dt;
+        if (piranha.wanderState === 'swimming') {
+          piranha.isMoving = true;
+          let vx = 0, vy = 0;
+          if (piranha.dir === DIR_DOWN) vy = 1;
+          else if (piranha.dir === DIR_UP) vy = -1;
+          else if (piranha.dir === DIR_RIGHT) vx = 1;
+          else if (piranha.dir === DIR_LEFT) vx = -1;
+
+          const nextX = piranha.x + vx * piranha.speed * dt;
+          const nextY = piranha.y + vy * piranha.speed * dt;
+
+          if (!checkCollision(nextX, nextY, piranha.width, piranha.height, true)) {
+            piranha.x = nextX;
+            piranha.y = nextY;
+            piranha.tileX = Math.round(piranha.x / TILE_SIZE);
+            piranha.tileY = Math.round(piranha.y / TILE_SIZE);
+          } else {
+            piranha.stateTimer = 0;
+          }
+
+          if (piranha.stateTimer <= 0) {
+            piranha.isMoving = false;
+            piranha.wanderState = 'hover';
+            piranha.stateTimer = 1.0 + Math.random() * 1.5;
+          }
+        } else {
+          piranha.isMoving = false;
+          if (piranha.stateTimer <= 0) {
+            piranha.dir = Math.floor(Math.random() * 4);
+            piranha.wanderState = 'swimming';
+            piranha.stateTimer = 1.5 + Math.random() * 2.0;
+          }
+        }
+      }
+    }
+
+    // Update the continuous out-of-sync harmonic sine wave flow field
+    function updateGrassFlowCanvas() {
+      const data = flowImageData.data;
+      const cos30 = 0.866025;
+      const sin30 = 0.5;
+      const fScale = grassParams.waveFreq;
+      const amp = grassParams.meanderAmp;
+
+      let idx = 0;
+      for (let sy = 0; sy < FLOW_H; sy++) {
+        const wy = sy * 4;
+        const r = Math.floor(wy / TILE_SIZE);
+
+        // Out-of-sync vertical / rolling waves
+        const w1 = Math.sin(wy * 0.0055 * fScale + 1.25) * amp;
+        const w2 = Math.cos(wy * 0.0135 * fScale + 3.41) * (amp * 0.55);
+
+        for (let sx = 0; sx < FLOW_W; sx++) {
+          const wx = sx * 4;
+          const c = Math.floor(wx / TILE_SIZE);
+
+          if (r < 0 || r >= GRID_ROWS || c < 0 || c >= GRID_COLS || terrainMap[r][c] !== TERRAIN_GRASS) {
+            data[idx + 3] = 0;
+            idx += 4;
+            continue;
+          }
+
+          // Out-of-sync cross-axis and diagonal waves
+          const w3 = Math.sin(wx * 0.0082 * fScale + wy * 0.0068 * fScale + 0.85) * (amp * 0.45);
+          const w4 = Math.cos(wx * 0.0185 * fScale - wy * 0.0125 * fScale + 2.15) * (amp * 0.30);
+
+          const px = wx + w1 + w4;
+          const py = wy + w2 + w3;
+
+          // 30 degree linear projection in warped coordinate space
+          const proj30 = px * cos30 + py * sin30;
+          const tLinear = proj30 / 2300;
+
+          // Large radial forest core (centered at 350, 450)
+          const distInland = Math.hypot(px - 350, py - 450) / 1500;
+
+          let factor = Math.min(1, Math.max(0, tLinear * 0.70 + distInland * 0.30));
+
+          // Mode-specific contour shaping
+          if (grassParams.mode === 'ribbons') {
+            const ribbon = Math.sin(factor * Math.PI * 10) * 0.09;
+            factor = Math.min(1, Math.max(0, factor + ribbon));
+          } else if (grassParams.mode === 'biome') {
+            const micro = Math.sin(wx * 0.022 * fScale) * Math.cos(wy * 0.022 * fScale) * 0.07;
+            factor = Math.min(1, Math.max(0, factor + micro));
+          } else if (grassParams.mode === 'smudge') {
+            const smudgeDrift = Math.sin((wx + wy) * 0.003 * fScale) * 0.04;
+            factor = Math.min(1, Math.max(0, factor + smudgeDrift));
+          }
+
+          // Map continuous factor to organic, unboxed tints:
+          if (factor < 0.48) {
+            // Deep inland emerald forest shade
+            const alpha = Math.min(255, Math.round((0.48 - factor) * 0.65 * 255));
+            data[idx] = 16;
+            data[idx + 1] = 56;
+            data[idx + 2] = 26;
+            data[idx + 3] = alpha;
+          } else if (factor > 0.32) {
+            // Sunny coastal lime tint
+            const alpha = Math.min(255, Math.round((factor - 0.32) * 0.48 * 255));
+            data[idx] = 215;
+            data[idx + 1] = 235;
+            data[idx + 2] = 105;
+            data[idx + 3] = alpha;
+          } else {
+            data[idx + 3] = 0;
+          }
+
+          idx += 4;
+        }
+      }
+      grassFlowCtx.putImageData(flowImageData, 0, 0);
+    }
+
+    // Render cross-tile grass blade smudging to eliminate hard rectangular box borders
+    function renderTileSeamSmudge() {
+      const bleed = grassParams.seamSmudge;
+      if (bleed <= 0) return;
+
+      const bladeColors = ['#2d5e38', '#387848', '#469156', '#244d2e'];
+
+      for (let r = 0; r < GRID_ROWS; r++) {
+        for (let c = 0; c < GRID_COLS; c++) {
+          if (terrainMap[r][c] !== TERRAIN_GRASS) continue;
+
+          const gx = c * TILE_SIZE;
+          const gy = r * TILE_SIZE;
+
+          // 1. Vertical seam with eastern grass neighbor (x = gx + TILE_SIZE)
+          if (c < GRID_COLS - 1 && terrainMap[r][c + 1] === TERRAIN_GRASS) {
+            const seamX = gx + TILE_SIZE;
+            const rand = makePrng(c * 7919 + r * 104729);
+
+            // Sprinkle organic cross-seam grass blade tufts
+            const numTufts = 4 + Math.floor(rand() * 3);
+            for (let i = 0; i < numTufts; i++) {
+              const ty = gy + Math.floor(rand() * (TILE_SIZE - 8)) + 4;
+              const ox = Math.floor((rand() - 0.5) * bleed);
+              const color = bladeColors[Math.floor(rand() * bladeColors.length)];
+              const bladeH = 3 + Math.floor(rand() * 4);
+
+              ctx.fillStyle = color;
+              ctx.fillRect(seamX + ox, ty, 2, bladeH);
+              ctx.fillRect(seamX + ox + 1, ty - 1, 1, bladeH + 1);
+            }
+          }
+
+          // 2. Horizontal seam with southern grass neighbor (y = gy + TILE_SIZE)
+          if (r < GRID_ROWS - 1 && terrainMap[r + 1][c] === TERRAIN_GRASS) {
+            const seamY = gy + TILE_SIZE;
+            const rand = makePrng(c * 65537 + r * 131071);
+
+            const numTufts = 4 + Math.floor(rand() * 3);
+            for (let i = 0; i < numTufts; i++) {
+              const tx = gx + Math.floor(rand() * (TILE_SIZE - 8)) + 4;
+              const oy = Math.floor((rand() - 0.5) * bleed);
+              const color = bladeColors[Math.floor(rand() * bladeColors.length)];
+              const bladeH = 3 + Math.floor(rand() * 4);
+
+              ctx.fillStyle = color;
+              ctx.fillRect(tx, seamY + oy, 2, bladeH);
+              ctx.fillRect(tx + 1, seamY + oy - 1, 1, bladeH + 1);
+            }
+          }
+
+          // 3. Diagonal 4-way corner junction smudging
+          if (c < GRID_COLS - 1 && r < GRID_ROWS - 1 &&
+              terrainMap[r][c + 1] === TERRAIN_GRASS &&
+              terrainMap[r + 1][c] === TERRAIN_GRASS &&
+              terrainMap[r + 1][c + 1] === TERRAIN_GRASS) {
+            const jx = gx + TILE_SIZE;
+            const jy = gy + TILE_SIZE;
+            ctx.fillStyle = '#367746';
+            ctx.fillRect(jx - 2, jy - 3, 4, 6);
+            ctx.fillRect(jx - 3, jy - 2, 6, 4);
+            ctx.fillStyle = '#4ea05f';
+            ctx.fillRect(jx - 1, jy - 4, 2, 3);
+            ctx.fillRect(jx + 1, jy - 2, 2, 4);
+          }
+        }
+      }
+    }
+
+    // Render floor grid with procedural terrain, unboxed continuous grass flow, seam smudges & surf
     function renderGroundGrid(now) {
       const timeSec = (now || 0) * 0.001;
 
+      // --- Pass 1: Render Base Terrain Texture Tiles ---
       for (let r = 0; r < GRID_ROWS; r++) {
         for (let c = 0; c < GRID_COLS; c++) {
           const gx = c * TILE_SIZE;
@@ -1006,39 +2423,6 @@
           if (type === TERRAIN_GRASS) {
             const variant = (c * 7 + r * 13) % 3;
             ctx.drawImage(tileCanvases.grass[variant], gx, gy);
-
-            // --- Grass Gradient Logic ---
-            // 1. Linear gradient at 30 degrees (pointing from inland top-left toward beach bottom-right)
-            const px = gx + 32;
-            const py = gy + 32;
-            const cos30 = 0.866025; // cos(30 deg)
-            const sin30 = 0.5;      // sin(30 deg)
-            const proj30 = px * cos30 + py * sin30;
-            const tLinear1 = Math.min(1, Math.max(0, proj30 / 1150));
-
-            // Secondary subtle wave variation along 30 deg axis
-            const tLinear2 = Math.sin(proj30 * 0.008) * 0.05;
-
-            // 2. Large radial gradient (inland forest core at x:180, y:340, radius:750)
-            const distInland = Math.hypot(px - 180, py - 340) / 750;
-            const tRadial = Math.min(1, Math.max(0, distInland));
-
-            // Combined coastal proximity factor (0 = deep inland, 1 = near beach/water)
-            const coastalFactor = Math.min(1, Math.max(0, tLinear1 * 0.70 + tRadial * 0.30 + tLinear2));
-
-            // Apply gradient tints:
-            if (coastalFactor < 0.48) {
-              // Deep inland: rich, deep emerald forest shade
-              const inlandIntensity = (0.48 - coastalFactor) * 0.55;
-              ctx.fillStyle = `rgba(16, 56, 26, ${inlandIntensity})`;
-              ctx.fillRect(gx, gy, TILE_SIZE, TILE_SIZE);
-            }
-            if (coastalFactor > 0.32) {
-              // Coastal / near beach: lighter, sun-warmed yellow-lime tint
-              const coastalIntensity = (coastalFactor - 0.32) * 0.42;
-              ctx.fillStyle = `rgba(215, 235, 105, ${coastalIntensity})`;
-              ctx.fillRect(gx, gy, TILE_SIZE, TILE_SIZE);
-            }
           } else if (type === TERRAIN_DIRT) {
             const variant = (c * 5 + r * 11) % 2;
             ctx.drawImage(tileCanvases.dirt[variant], gx, gy);
@@ -1057,31 +2441,102 @@
             ctx.fillRect(gx + 4, waveY1, 26, 2.5);
             ctx.fillRect(gx + 32, waveY2, 24, 2.5);
 
-            // Glistening specular highlights
+            // Specular highlights
             ctx.fillStyle = 'rgba(219, 234, 254, 0.55)';
             ctx.fillRect(gx + 10, waveY1 + 1, 14, 1.5);
             ctx.fillRect(gx + 38, waveY2 + 1, 12, 1.5);
+          }
+        }
+      }
 
+      // --- Pass 2: Cross-Tile Seam Smudging (Dissolves Hard Tile Box Edges) ---
+      renderTileSeamSmudge();
+
+      // --- Pass 3: Continuous Out-of-Sync Sine Wave Flow Gradient (Hardware Bilinear Smooth) ---
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(grassFlowCanvas, 0, 0, canvas.width, canvas.height);
+      ctx.restore();
+
+      // --- Pass 4: Sand & Coastal Fringe Transitions & Dynamic Surf Foam ---
+      for (let r = 0; r < GRID_ROWS; r++) {
+        for (let c = 0; c < GRID_COLS; c++) {
+          const gx = c * TILE_SIZE;
+          const gy = r * TILE_SIZE;
+          const type = terrainMap[r][c];
+
+          if (type === TERRAIN_DIRT || type === TERRAIN_SAND) {
+            // Soft organic grass fringe transitions if bordering grass
+            const hasNorthGrass = r > 0 && terrainMap[r - 1][c] === TERRAIN_GRASS;
+            const hasSouthGrass = r < GRID_ROWS - 1 && terrainMap[r + 1][c] === TERRAIN_GRASS;
+            const hasWestGrass = c > 0 && terrainMap[r][c - 1] === TERRAIN_GRASS;
+            const hasEastGrass = c < GRID_COLS - 1 && terrainMap[r][c + 1] === TERRAIN_GRASS;
+
+            ctx.fillStyle = '#2d5e38';
+            if (hasNorthGrass) {
+              for (let i = 0; i < TILE_SIZE; i += 4) {
+                const len = (i * 7 + c * 3) % 4 + 2;
+                ctx.fillRect(gx + i, gy, 3, len);
+              }
+            }
+            if (hasSouthGrass) {
+              for (let i = 0; i < TILE_SIZE; i += 4) {
+                const len = (i * 7 + c * 5) % 4 + 2;
+                ctx.fillRect(gx + i, gy + TILE_SIZE - len, 3, len);
+              }
+            }
+            if (hasWestGrass) {
+              for (let i = 0; i < TILE_SIZE; i += 4) {
+                const len = (i * 7 + r * 3) % 4 + 2;
+                ctx.fillRect(gx, gy + i, len, 3);
+              }
+            }
+            if (hasEastGrass) {
+              for (let i = 0; i < TILE_SIZE; i += 4) {
+                const len = (i * 7 + r * 5) % 4 + 2;
+                ctx.fillRect(gx + TILE_SIZE - len, gy + i, len, 3);
+              }
+            }
+          } else if (type === TERRAIN_WATER) {
             // Shoreline transitions if adjacent to land
             const isWestLand = c > 0 && terrainMap[r][c - 1] !== TERRAIN_WATER;
             const isEastLand = c < GRID_COLS - 1 && terrainMap[r][c + 1] !== TERRAIN_WATER;
             const isNorthLand = r > 0 && terrainMap[r - 1][c] !== TERRAIN_WATER;
             const isSouthLand = r < GRID_ROWS - 1 && terrainMap[r + 1][c] !== TERRAIN_WATER;
+            const isNWLand = (r > 0 && c > 0) && terrainMap[r - 1][c - 1] !== TERRAIN_WATER;
+            const isSWLand = (r < GRID_ROWS - 1 && c > 0) && terrainMap[r + 1][c - 1] !== TERRAIN_WATER;
 
-            ctx.fillStyle = 'rgba(254, 240, 138, 0.45)'; // Sandy rim
-            if (isWestLand) ctx.fillRect(gx, gy, 3, TILE_SIZE);
-            if (isEastLand) ctx.fillRect(gx + TILE_SIZE - 3, gy, 3, TILE_SIZE);
-            if (isNorthLand) ctx.fillRect(gx, gy, TILE_SIZE, 3);
-            if (isSouthLand) ctx.fillRect(gx, gy + TILE_SIZE - 3, TILE_SIZE, 3);
+            // Shoreline sand buffer
+            ctx.fillStyle = 'rgba(212, 163, 115, 0.85)';
+            if (isWestLand) ctx.fillRect(gx, gy, 4, TILE_SIZE);
+            if (isEastLand) ctx.fillRect(gx + TILE_SIZE - 4, gy, 4, TILE_SIZE);
+            if (isNorthLand) ctx.fillRect(gx, gy, TILE_SIZE, 4);
+            if (isSouthLand) ctx.fillRect(gx, gy + TILE_SIZE - 4, TILE_SIZE, 4);
 
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; // Foam edge
-            if (isWestLand) ctx.fillRect(gx + 3, gy, 2, TILE_SIZE);
-            if (isEastLand) ctx.fillRect(gx + TILE_SIZE - 5, gy, 2, TILE_SIZE);
-            if (isNorthLand) ctx.fillRect(gx, gy + 3, TILE_SIZE, 2);
-            if (isSouthLand) ctx.fillRect(gx, gy + TILE_SIZE - 5, TILE_SIZE, 2);
+            // Dynamic rounded surf foam with breathing wave effect
+            const surfBreath = Math.sin(timeSec * 2.8 + (r + c) * 0.5) * 1.5;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+            if (isWestLand) ctx.fillRect(gx + 4, gy, 3 + surfBreath, TILE_SIZE);
+            if (isEastLand) ctx.fillRect(gx + TILE_SIZE - 7 - surfBreath, gy, 3 + surfBreath, TILE_SIZE);
+            if (isNorthLand) ctx.fillRect(gx, gy + 4, TILE_SIZE, 3 + surfBreath);
+            if (isSouthLand) ctx.fillRect(gx, gy + TILE_SIZE - 7 - surfBreath, TILE_SIZE, 3 + surfBreath);
+
+            // Diagonal corner rounding if meeting land diagonally
+            if (!isWestLand && !isNorthLand && isNWLand) {
+              ctx.fillStyle = 'rgba(212, 163, 115, 0.85)';
+              ctx.fillRect(gx, gy, 5, 5);
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+              ctx.fillRect(gx + 2, gy + 2, 4, 4);
+            }
+            if (!isWestLand && !isSouthLand && isSWLand) {
+              ctx.fillStyle = 'rgba(212, 163, 115, 0.85)';
+              ctx.fillRect(gx, gy + TILE_SIZE - 5, 5, 5);
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+              ctx.fillRect(gx + 2, gy + TILE_SIZE - 6, 4, 4);
+            }
           }
 
-          // Grid lines overlay
+          // Grid lines overlay (only if checked)
           if (debug.grid) {
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
             ctx.lineWidth = 1;
@@ -1113,7 +2568,20 @@
 
       // Update positions
       updatePlayer(dt);
-      updateRiverRatNPC(dt);
+      for (const ent of entities) {
+        if (ent.type === 'npc') {
+          if (ent.npcType === 'rat') {
+            updateRatNPC(ent, dt);
+          } else if (ent.npcType === 'piranha') {
+            updatePiranhaNPC(ent, dt);
+          }
+        }
+      }
+
+      // Auto-Center Camera on Player if enabled and nothing currently selected in Sprite Editor
+      if (debug.cameraFollow && !selectedEntity) {
+        centerCameraOn(player.x + 32, player.y + 32);
+      }
 
       // Clear canvas
       ctx.imageSmoothingEnabled = false;
@@ -1122,7 +2590,12 @@
       // 1. Draw Background Ground Tiles
       renderGroundGrid(now);
 
-      // 2. Gather All Renderable Entities for Depth Sorting
+      // 2. Draw Directional Silhouette Shadows (on top of terrain, under all items)
+      if (debug.shadows) {
+        renderAllShadows(now);
+      }
+
+      // 3. Gather All Renderable Entities for Depth Sorting
       const renderList = [];
 
       // Add static props and NPCs
@@ -1155,43 +2628,119 @@
       // 4. Draw Sorted Entities
       for (const item of renderList) {
         if (item.isPlayer) {
-          renderPlayerSprite(item.footX, item.footY);
+          renderPlayerSprite(item.footX, item.footY, now);
         } else {
-          renderEntitySprite(item.entity);
+          renderEntitySprite(item.entity, now);
         }
       }
 
       requestAnimationFrame(gameLoop);
     }
 
-    // Render Entity Sprite
-    function renderEntitySprite(ent) {
-      const img = assets[ent.asset];
-      const fw = ent.frameWidth || 128;
-      const fh = ent.frameHeight || 128;
-      const rw = ent.renderWidth || fw;
-      const rh = ent.renderHeight || fh;
-      const anchorX = ent.anchorX !== undefined ? ent.anchorX : rw / 2;
-      const anchorY = ent.anchorY !== undefined ? ent.anchorY : (ent.anchorPreset === 'center' ? rh / 2 : rh);
+    // Reusable offscreen scratch canvas for rendering directional silhouette shadows
+    const shadowCanvas = document.createElement('canvas');
+    shadowCanvas.width = 256;
+    shadowCanvas.height = 256;
+    const shadowCtx = shadowCanvas.getContext('2d');
 
-      // Placement formula:
-      // If centered: anchor aligns with center of ground footprint
-      // If bottom-center: anchor aligns with bottom-center of ground footprint
-      let screenX, screenY;
-      if (ent.anchorPreset === 'center') {
-        screenX = Math.round(ent.x + (ent.width / 2) - anchorX);
-        screenY = Math.round(ent.y + (ent.height / 2) - anchorY);
-      } else {
-        screenX = Math.round(ent.x + (ent.width / 2) - anchorX);
-        screenY = Math.round(ent.y + ent.height - anchorY);
+    // Sun is off scene right (East): shadow shears and tilts 20° CCW to the left
+    const SHADOW_SHEAR_X = 0.19; // 20.0° CCW tilt with scaleY of 0.52
+    const SHADOW_SCALE_Y = 0.52; // Oblique ground-plane perspective foreshortening
+    const SHADOW_COLOR = 'rgba(20, 28, 40, 0.40)'; // Uniform slate-dark silhouette
+
+    function drawObjectSilhouetteShadow(img, srcX, srcY, fw, fh, rw, rh, Gx, Gy, localX, localY, isCenterAnchor) {
+      if (!img || !isAssetReady(img)) return;
+
+      if (shadowCanvas.width < fw || shadowCanvas.height < fh) {
+        shadowCanvas.width = Math.max(shadowCanvas.width, fw);
+        shadowCanvas.height = Math.max(shadowCanvas.height, fh);
       }
 
-      // Determine frame coordinates in sprite sheet
-      let srcX = ent.frameX || 0;
-      let srcY = ent.frameY || 0;
+      // Step 1: Draw source frame onto shadow scratch canvas
+      shadowCtx.clearRect(0, 0, fw, fh);
+      shadowCtx.drawImage(img, srcX, srcY, fw, fh, 0, 0, fw, fh);
 
-      if (ent.type === 'npc') {
-        if (ent.id === 'river-rat-npc') {
+      // Step 2: Mask with uniform dark grey silhouette & feather in the contact baseline
+      shadowCtx.globalCompositeOperation = 'source-in';
+
+      const featherRatio = debug.shadowFeather !== undefined ? debug.shadowFeather : 0.40;
+      if (featherRatio > 0.005) {
+        // Vertical gradient feathering across the contact baseline
+        const grad = shadowCtx.createLinearGradient(0, 0, 0, fh);
+        const contactStop = isCenterAnchor ? 0.72 : 1.0;
+        const fadeStartStop = Math.max(0.05, contactStop - featherRatio);
+
+        grad.addColorStop(0.0, SHADOW_COLOR);
+        grad.addColorStop(fadeStartStop, SHADOW_COLOR);
+        grad.addColorStop(contactStop, 'rgba(20, 28, 40, 0.00)');
+        if (contactStop < 1.0) {
+          grad.addColorStop(1.0, 'rgba(20, 28, 40, 0.00)');
+        }
+
+        shadowCtx.fillStyle = grad;
+      } else {
+        shadowCtx.fillStyle = SHADOW_COLOR;
+      }
+
+      shadowCtx.fillRect(0, 0, fw, fh);
+      shadowCtx.globalCompositeOperation = 'source-over';
+
+      // Step 3: Draw transformed silhouette onto the ground plane (sheared & tilted 20° CCW)
+      ctx.save();
+      ctx.translate(Gx, Gy);
+      ctx.transform(1, 0, SHADOW_SHEAR_X, SHADOW_SCALE_Y, 0, 0);
+      ctx.drawImage(shadowCanvas, 0, 0, fw, fh, localX, localY, rw, rh);
+      ctx.restore();
+    }
+
+    // Render all shadows (placed on top of terrain, under all items)
+    function renderAllShadows(now) {
+      const nowSec = (now || 0) * 0.001;
+
+      // 1. Static Props & NPC Shadows
+      for (const ent of entities) {
+        const img = assets[ent.asset];
+        const fw = ent.frameWidth || 128;
+        const fh = ent.frameHeight || 128;
+        const rw = ent.renderWidth || fw;
+        const rh = ent.renderHeight || fh;
+        const anchorX = ent.anchorX !== undefined ? ent.anchorX : rw / 2;
+        const anchorY = ent.anchorY !== undefined ? ent.anchorY : (ent.anchorPreset === 'center' ? rh / 2 : rh);
+        const isCenter = ent.anchorPreset === 'center';
+
+        let screenX, screenY, Gx, Gy;
+        if (isCenter) {
+          screenX = Math.round(ent.x + (ent.width / 2) - anchorX);
+          screenY = Math.round(ent.y + (ent.height / 2) - anchorY);
+          Gx = screenX + anchorX;
+          Gy = screenY + anchorY + Math.round(rh * 0.14);
+        } else {
+          screenX = Math.round(ent.x + (ent.width / 2) - anchorX);
+          screenY = Math.round(ent.y + ent.height - anchorY);
+          Gx = screenX + anchorX;
+          const contactOffset = ent.id === 'house' ? 12 : (ent.asset === 'palm-tree' ? 8 : 4);
+          Gy = screenY + anchorY - contactOffset;
+        }
+
+        // Piranha NPCs cast soft, diffused underwater shadows directly on the seabed
+        if (ent.npcType === 'piranha') {
+          ctx.save();
+          const bob = Math.sin((nowSec * 3.2) + (ent.bobOffset || 0)) * 2;
+          ctx.fillStyle = 'rgba(10, 24, 60, 0.35)';
+          ctx.beginPath();
+          ctx.ellipse(screenX + anchorX, screenY + anchorY + 12 - bob, rw * 0.28, rh * 0.12, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+          continue;
+        }
+
+        const localX = screenX - Gx;
+        const localY = screenY - Gy;
+
+        // Frame selection for NPCs
+        let srcX = ent.frameX || 0;
+        let srcY = ent.frameY || 0;
+        if (ent.type === 'npc' && ent.npcType === 'rat') {
           if (ent.wanderState === 'walking') {
             const frameIndex = Math.floor(ent.animTime * (ent.fps || 8)) % 8;
             srcX = frameIndex * fw;
@@ -1205,20 +2754,139 @@
             srcX = look.col * fw;
             srcY = look.row * fh;
           } else {
-            // idle_center
             srcX = 0;
             srcY = ent.dir * fh;
           }
-        } else {
-          const frameIndex = Math.floor(ent.animTime * (ent.fps || 8)) % 8;
-          srcX = frameIndex * fw;
-          srcY = ent.dir * fh;
+        }
+
+        drawObjectSilhouetteShadow(img, srcX, srcY, fw, fh, rw, rh, Gx, Gy, localX, localY, isCenter);
+      }
+
+      // 2. Player Shadow
+      const p = player;
+      const pImg = p.customImg || assets[p.activeModel];
+      const pFw = p.frameWidth;
+      const pFh = p.frameHeight;
+      const pRw = p.renderWidth || pFw;
+      const pRh = p.renderHeight || pFh;
+      const pAnchorX = p.anchorX;
+      const pAnchorY = p.anchorY;
+      const pIsCenter = p.anchorPreset === 'center';
+
+      let pScreenX, pScreenY, pGx, pGy;
+      if (pIsCenter) {
+        pScreenX = Math.round(p.x + (p.width / 2) - pAnchorX);
+        pScreenY = Math.round(p.y + (p.height / 2) - pAnchorY);
+        pGx = pScreenX + pAnchorX;
+        pGy = pScreenY + pAnchorY + Math.round(pRh * 0.14);
+      } else {
+        pScreenX = Math.round(p.x + (p.width / 2) - pAnchorX);
+        pScreenY = Math.round(p.y + p.height - pAnchorY);
+        pGx = pScreenX + pAnchorX;
+        pGy = pScreenY + pAnchorY - 6; // Soles of shoes
+      }
+
+      const pLocalX = pScreenX - pGx;
+      const pLocalY = pScreenY - pGy;
+
+      const pFrameIndex = p.isMoving ? Math.floor(p.animTime * p.fps) % p.totalWalkFrames : 0;
+      const pSrcX = pFrameIndex * pFw;
+      const pSrcY = p.dir * pFh;
+
+      drawObjectSilhouetteShadow(pImg, pSrcX, pSrcY, pFw, pFh, pRw, pRh, pGx, pGy, pLocalX, pLocalY, pIsCenter);
+    }
+
+    // Render Entity Sprite
+    function renderEntitySprite(ent, now) {
+      const nowSec = (now || 0) * 0.001;
+      const img = assets[ent.asset];
+      const fw = ent.frameWidth || 128;
+      const fh = ent.frameHeight || 128;
+      const rw = ent.renderWidth || fw;
+      const rh = ent.renderHeight || fh;
+      const anchorX = ent.anchorX !== undefined ? ent.anchorX : rw / 2;
+      const anchorY = ent.anchorY !== undefined ? ent.anchorY : (ent.anchorPreset === 'center' ? rh / 2 : rh);
+
+      let screenX, screenY;
+      if (ent.anchorPreset === 'center') {
+        screenX = Math.round(ent.x + (ent.width / 2) - anchorX);
+        screenY = Math.round(ent.y + (ent.height / 2) - anchorY);
+      } else {
+        screenX = Math.round(ent.x + (ent.width / 2) - anchorX);
+        screenY = Math.round(ent.y + ent.height - anchorY);
+      }
+
+      // Piranhas have floating bobbing motion in water
+      let bobY = 0;
+      if (ent.npcType === 'piranha') {
+        bobY = Math.sin((nowSec * 3.2) + (ent.bobOffset || 0)) * 2.5;
+        screenY += Math.round(bobY);
+      }
+
+      // Determine frame coordinates in sprite sheet
+      let srcX = ent.frameX || 0;
+      let srcY = ent.frameY || 0;
+
+      if (ent.type === 'npc') {
+        if (ent.npcType === 'rat') {
+          if (ent.wanderState === 'walking') {
+            const frameIndex = Math.floor(ent.animTime * (ent.fps || 8)) % 8;
+            srcX = frameIndex * fw;
+            srcY = ent.dir * fh;
+          } else if (ent.wanderState === 'look_right') {
+            const look = getRatLookFrame(ent.dir, 'right');
+            srcX = look.col * fw;
+            srcY = look.row * fh;
+          } else if (ent.wanderState === 'look_left') {
+            const look = getRatLookFrame(ent.dir, 'left');
+            srcX = look.col * fw;
+            srcY = look.row * fh;
+          } else {
+            srcX = 0;
+            srcY = ent.dir * fh;
+          }
+        } else if (ent.npcType === 'piranha') {
+          srcX = ent.frameX || 0;
+          srcY = ent.frameY || 0;
         }
       }
 
       // Draw sprite image or fallback placeholder
-      if (img && img.complete && img.naturalWidth > 0) {
-        ctx.drawImage(img, srcX, srcY, fw, fh, screenX, screenY, rw, rh);
+      if (isAssetReady(img)) {
+        if (ent.tint === 'black') {
+          const shadedRat = getShadedBlackRatCanvas(img);
+          if (shadedRat) {
+            ctx.drawImage(shadedRat, srcX, srcY, fw, fh, screenX, screenY, rw, rh);
+          } else {
+            ctx.save();
+            ctx.filter = 'grayscale(100%) brightness(0.38) contrast(1.3)';
+            ctx.drawImage(img, srcX, srcY, fw, fh, screenX, screenY, rw, rh);
+            ctx.restore();
+          }
+        } else {
+          ctx.drawImage(img, srcX, srcY, fw, fh, screenX, screenY, rw, rh);
+        }
+
+        // Half-Submerged Water Effects for Piranha
+        if (ent.npcType === 'piranha') {
+          ctx.save();
+          // 1. Translucent underwater body wash tint (submerges lower 65% of the fish body)
+          ctx.fillStyle = 'rgba(30, 75, 175, 0.45)';
+          ctx.fillRect(screenX, screenY + Math.round(rh * 0.36), rw, Math.round(rh * 0.64));
+
+          // 2. Surface water ripple ellipse surrounding the dorsal water plane
+          const rippleBreath = Math.sin((nowSec * 4.0) + (ent.bobOffset || 0)) * 2.5;
+          ctx.strokeStyle = 'rgba(219, 234, 254, 0.60)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.ellipse(screenX + anchorX, screenY + anchorY + 4, Math.max(10, rw * 0.32 + rippleBreath), Math.max(4, rh * 0.14 + (rippleBreath * 0.4)), 0, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // 3. Specular water caustics / surface foam line
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.50)';
+          ctx.fillRect(screenX + Math.round(rw * 0.18), screenY + Math.round(rh * 0.36), Math.round(rw * 0.64), 1.5);
+          ctx.restore();
+        }
       } else {
         // Fallback placeholder
         ctx.fillStyle = ent.solid ? '#ca8a04' : '#16a34a';
@@ -1229,12 +2897,17 @@
         ctx.fillText(ent.name, screenX + rw / 2, screenY + rh / 2);
       }
 
+      // Selection Overlay if selected in Sprite Editor
+      if (selectedEntity === ent) {
+        drawEntitySelectionOverlay(ent, ent.x, ent.y, ent.width, ent.height, screenX, screenY, rw, rh, anchorX, anchorY);
+      }
+
       // Debug Overlays
       drawDebugVisuals(ent.x, ent.y, ent.width, ent.height, screenX, screenY, rw, rh, anchorX, anchorY);
     }
 
     // Render Player Sprite
-    function renderPlayerSprite(footX, footY) {
+    function renderPlayerSprite(footX, footY, now) {
       const p = player;
       let img = p.customImg || assets[p.activeModel];
 
@@ -1245,7 +2918,6 @@
       const anchorX = p.anchorX;
       const anchorY = p.anchorY;
 
-      // Placement formula:
       let screenX, screenY;
       if (p.anchorPreset === 'center') {
         screenX = Math.round(footX + (p.width / 2) - anchorX);
@@ -1256,12 +2928,11 @@
       }
 
       // Frame selection:
-      // Row 0: Down (0°), Row 1: Right (90°), Row 2: Up (180°), Row 3: Left (270°)
       const frameIndex = p.isMoving ? Math.floor(p.animTime * p.fps) % p.totalWalkFrames : 0;
       const srcX = frameIndex * fw;
       const srcY = p.dir * fh;
 
-      if (img && img.complete && img.naturalWidth > 0) {
+      if (isAssetReady(img)) {
         ctx.drawImage(img, srcX, srcY, fw, fh, screenX, screenY, rw, rh);
       } else {
         // Fallback procedural player
@@ -1273,8 +2944,85 @@
         ctx.fillText('Player', screenX + rw / 2, screenY + rh / 2);
       }
 
+      // Selection Overlay if player is selected in Sprite Editor
+      if (selectedEntity === player) {
+        drawEntitySelectionOverlay(player, footX, footY, p.width, p.height, screenX, screenY, rw, rh, anchorX, anchorY);
+      }
+
       // Debug Overlays
       drawDebugVisuals(footX, footY, p.width, p.height, screenX, screenY, rw, rh, anchorX, anchorY);
+    }
+
+    // Sprite Editor Selection Overlay Renderer
+    function drawEntitySelectionOverlay(ent, footX, footY, footW, footH, screenX, screenY, rw, rh, anchorX, anchorY) {
+      ctx.save();
+
+      // 1. Animated marching dashed gold bounding box
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.lineDashOffset = -performance.now() * 0.025;
+      ctx.strokeRect(screenX - 1.5, screenY - 1.5, rw + 3, rh + 3);
+      ctx.setLineDash([]);
+
+      // 2. Solid corner brackets
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 3;
+      const bLen = Math.min(14, rw / 4);
+      // Top-left
+      ctx.beginPath();
+      ctx.moveTo(screenX - 3, screenY + bLen);
+      ctx.lineTo(screenX - 3, screenY - 3);
+      ctx.lineTo(screenX + bLen, screenY - 3);
+      ctx.stroke();
+      // Top-right
+      ctx.beginPath();
+      ctx.moveTo(screenX + rw + 3 - bLen, screenY - 3);
+      ctx.lineTo(screenX + rw + 3, screenY - 3);
+      ctx.lineTo(screenX + rw + 3, screenY + bLen);
+      ctx.stroke();
+      // Bottom-left
+      ctx.beginPath();
+      ctx.moveTo(screenX - 3, screenY + rh + 3 - bLen);
+      ctx.lineTo(screenX - 3, screenY + rh + 3);
+      ctx.lineTo(screenX + bLen, screenY + rh + 3);
+      ctx.stroke();
+      // Bottom-right
+      ctx.beginPath();
+      ctx.moveTo(screenX + rw + 3 - bLen, screenY + rh + 3);
+      ctx.lineTo(screenX + rw + 3, screenY + rh + 3);
+      ctx.lineTo(screenX + rw + 3, screenY + rh + 3 - bLen);
+      ctx.stroke();
+
+      // 3. Highlighted ground footprint
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(footX + 0.5, footY + 0.5, footW - 1, footH - 1);
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.22)';
+      ctx.fillRect(footX + 1, footY + 1, footW - 2, footH - 2);
+
+      // 4. Anchor Point Crosshair & Live Coordinates Label
+      const ax = screenX + anchorX;
+      const ay = screenY + anchorY;
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(ax - 9, ay);
+      ctx.lineTo(ax + 9, ay);
+      ctx.moveTo(ax, ay - 9);
+      ctx.lineTo(ax, ay + 9);
+      ctx.stroke();
+
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(ax + 8, ay - 16, 110, 15);
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(ax + 8, ay - 16, 110, 15);
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = 'bold 10px monospace';
+      ctx.fillText(`Anchor: ${Math.round(anchorX)}, ${Math.round(anchorY)}`, ax + 12, ay - 5);
+
+      ctx.restore();
     }
 
     // Debug overlays renderer
@@ -1310,16 +3058,363 @@
     }
 
     /* ========================================================================
+       Camera & Viewport Zoom Engine
+       ======================================================================== */
+    let currentZoom = 1.0;
+
+    function setZoom(scale) {
+      currentZoom = scale;
+      canvas.style.transform = `scale(${scale})`;
+      document.getElementById('zoom-05x').classList.toggle('active', scale === 0.5);
+      document.getElementById('zoom-1x').classList.toggle('active', scale === 1.0);
+      document.getElementById('zoom-15x').classList.toggle('active', scale === 1.5);
+    }
+
+    function centerCameraOn(canvasX, canvasY) {
+      const wrapper = document.getElementById('canvas-wrapper');
+      if (!wrapper) return;
+      const targetScrollLeft = (canvasX * currentZoom) - (wrapper.clientWidth / 2);
+      const targetScrollTop = (canvasY * currentZoom) - (wrapper.clientHeight / 2);
+      wrapper.scrollLeft = Math.max(0, targetScrollLeft);
+      wrapper.scrollTop = Math.max(0, targetScrollTop);
+    }
+
+    /* ========================================================================
+       Interactive Sprite & Prop Editor Logic
+       ======================================================================== */
+    let selectedEntity = null;
+
+    function updateFrameLabel(ent) {
+      const idx = ent.frameIndex || 0;
+      const angle = (idx * 30) % 360;
+      document.getElementById('ed-frame-label').textContent = `Frame ${idx} (${angle}°)`;
+    }
+
+    function selectEntity(ent) {
+      selectedEntity = ent;
+      const selectBox = document.getElementById('editor-entity-select');
+      const controlsPanel = document.getElementById('editor-controls-panel');
+
+      if (!ent) {
+        selectBox.value = '';
+        controlsPanel.style.display = 'none';
+        return;
+      }
+
+      controlsPanel.style.display = 'block';
+      selectBox.value = ent.id;
+
+      // Populate UI values
+      document.getElementById('ed-entity-name').textContent = ent.name || ent.id;
+      document.getElementById('ed-entity-id').textContent = ent.id;
+      document.getElementById('ed-tile-x').value = ent.tileX !== undefined ? ent.tileX : Math.floor(ent.x / TILE_SIZE);
+      document.getElementById('ed-tile-y').value = ent.tileY !== undefined ? ent.tileY : Math.floor(ent.y / TILE_SIZE);
+
+      const maxFrames = (ent.asset === 'rock-pile' ? 8 : 12) - 1;
+      const frameSlider = document.getElementById('ed-frame-slider');
+      frameSlider.max = maxFrames;
+      frameSlider.value = ent.frameIndex || 0;
+      updateFrameLabel(ent);
+
+      const rw = ent.renderWidth || ent.frameWidth || 128;
+      const rh = ent.renderHeight || ent.frameHeight || 128;
+      document.getElementById('ed-anchor-preset').value = ent.anchorPreset || 'bottom-center';
+      document.getElementById('ed-anchor-x').value = ent.anchorX !== undefined ? ent.anchorX : rw / 2;
+      document.getElementById('ed-anchor-y').value = ent.anchorY !== undefined ? ent.anchorY : (ent.anchorPreset === 'center' ? rh / 2 : rh);
+      document.getElementById('ed-render-w').value = rw;
+      document.getElementById('ed-render-h').value = rh;
+    }
+
+    function populateEntitySelect() {
+      const select = document.getElementById('editor-entity-select');
+      select.innerHTML = '<option value="">-- Click Sprite or Select --</option>';
+
+      // Player
+      const optP = document.createElement('option');
+      optP.value = player.id;
+      optP.textContent = `★ ${player.name}`;
+      select.appendChild(optP);
+
+      // Entities
+      for (const ent of entities) {
+        const opt = document.createElement('option');
+        opt.value = ent.id;
+        const icon = ent.npcType ? '🐾 ' : (ent.isDock ? '⚓ ' : '📦 ');
+        opt.textContent = `${icon}${ent.name}`;
+        select.appendChild(opt);
+      }
+    }
+
+    // Canvas click to select entity
+    canvas.addEventListener('click', (e) => {
+      // If painting terrain, do not trigger sprite selection
+      if (activeBrush !== null) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const clickX = (e.clientX - rect.left) * scaleX;
+      const clickY = (e.clientY - rect.top) * scaleY;
+
+      const hitCandidates = [];
+
+      // Check player
+      const pRw = player.renderWidth || player.frameWidth;
+      const pRh = player.renderHeight || player.frameHeight;
+      const pAnchorX = player.anchorX;
+      const pAnchorY = player.anchorY;
+      const pScreenX = Math.round(player.x + (player.width / 2) - pAnchorX);
+      const pScreenY = player.anchorPreset === 'center'
+        ? Math.round(player.y + (player.height / 2) - pAnchorY)
+        : Math.round(player.y + player.height - pAnchorY);
+
+      if (clickX >= pScreenX && clickX <= pScreenX + pRw && clickY >= pScreenY && clickY <= pScreenY + pRh) {
+        hitCandidates.push({ ent: player, depth: player.y + player.height });
+      }
+
+      // Check entities
+      for (const ent of entities) {
+        const rw = ent.renderWidth || ent.frameWidth || 128;
+        const rh = ent.renderHeight || ent.frameHeight || 128;
+        const anchorX = ent.anchorX !== undefined ? ent.anchorX : rw / 2;
+        const anchorY = ent.anchorY !== undefined ? ent.anchorY : (ent.anchorPreset === 'center' ? rh / 2 : rh);
+        let screenX, screenY;
+        if (ent.anchorPreset === 'center') {
+          screenX = Math.round(ent.x + (ent.width / 2) - anchorX);
+          screenY = Math.round(ent.y + (ent.height / 2) - anchorY);
+        } else {
+          screenX = Math.round(ent.x + (ent.width / 2) - anchorX);
+          screenY = Math.round(ent.y + ent.height - anchorY);
+        }
+
+        const inBounds = (clickX >= screenX && clickX <= screenX + rw && clickY >= screenY && clickY <= screenY + rh);
+        const inFootprint = (clickX >= ent.x && clickX <= ent.x + ent.width && clickY >= ent.y && clickY <= ent.y + ent.height);
+
+        if (inBounds || inFootprint) {
+          hitCandidates.push({ ent, depth: ent.y + ent.height });
+        }
+      }
+
+      if (hitCandidates.length > 0) {
+        hitCandidates.sort((a, b) => b.depth - a.depth);
+        selectEntity(hitCandidates[0].ent);
+      }
+    });
+
+    // Wire up Sprite Editor event controls
+    document.getElementById('editor-entity-select').addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (!val) {
+        selectEntity(null);
+      } else if (val === 'player') {
+        selectEntity(player);
+      } else {
+        const found = entities.find(x => x.id === val);
+        selectEntity(found || null);
+      }
+    });
+
+    document.getElementById('ed-tile-x').addEventListener('input', (e) => {
+      if (!selectedEntity) return;
+      const tx = Math.max(0, Math.min(GRID_COLS - 1, parseInt(e.target.value) || 0));
+      selectedEntity.tileX = tx;
+      selectedEntity.startTileX = tx;
+      selectedEntity.targetTileX = tx;
+      selectedEntity.x = tx * TILE_SIZE;
+    });
+
+    document.getElementById('ed-tile-y').addEventListener('input', (e) => {
+      if (!selectedEntity) return;
+      const ty = Math.max(0, Math.min(GRID_ROWS - 1, parseInt(e.target.value) || 0));
+      selectedEntity.tileY = ty;
+      selectedEntity.startTileY = ty;
+      selectedEntity.targetTileY = ty;
+      selectedEntity.y = ty * TILE_SIZE;
+    });
+
+    document.getElementById('ed-frame-slider').addEventListener('input', (e) => {
+      if (!selectedEntity) return;
+      const f = parseInt(e.target.value);
+      setEntityFrame(selectedEntity, f);
+      updateFrameLabel(selectedEntity);
+    });
+
+    document.getElementById('ed-prev-frame').addEventListener('click', () => {
+      if (!selectedEntity) return;
+      const slider = document.getElementById('ed-frame-slider');
+      let f = (selectedEntity.frameIndex || 0) - 1;
+      if (f < 0) f = parseInt(slider.max);
+      slider.value = f;
+      setEntityFrame(selectedEntity, f);
+      updateFrameLabel(selectedEntity);
+    });
+
+    document.getElementById('ed-next-frame').addEventListener('click', () => {
+      if (!selectedEntity) return;
+      const slider = document.getElementById('ed-frame-slider');
+      let f = (selectedEntity.frameIndex || 0) + 1;
+      if (f > parseInt(slider.max)) f = 0;
+      slider.value = f;
+      setEntityFrame(selectedEntity, f);
+      updateFrameLabel(selectedEntity);
+    });
+
+    document.getElementById('ed-anchor-preset').addEventListener('change', (e) => {
+      if (!selectedEntity) return;
+      const preset = e.target.value;
+      selectedEntity.anchorPreset = preset;
+      const rw = selectedEntity.renderWidth || selectedEntity.frameWidth || 128;
+      const rh = selectedEntity.renderHeight || selectedEntity.frameHeight || 128;
+
+      if (preset === 'bottom-center') {
+        selectedEntity.anchorX = rw / 2;
+        selectedEntity.anchorY = rh;
+      } else if (preset === 'center') {
+        selectedEntity.anchorX = rw / 2;
+        selectedEntity.anchorY = rh / 2;
+      }
+      document.getElementById('ed-anchor-x').value = selectedEntity.anchorX;
+      document.getElementById('ed-anchor-y').value = selectedEntity.anchorY;
+    });
+
+    document.getElementById('ed-anchor-x').addEventListener('input', (e) => {
+      if (!selectedEntity) return;
+      selectedEntity.anchorX = parseFloat(e.target.value) || 0;
+      selectedEntity.anchorPreset = 'custom';
+      document.getElementById('ed-anchor-preset').value = 'custom';
+    });
+
+    document.getElementById('ed-anchor-y').addEventListener('input', (e) => {
+      if (!selectedEntity) return;
+      selectedEntity.anchorY = parseFloat(e.target.value) || 0;
+      selectedEntity.anchorPreset = 'custom';
+      document.getElementById('ed-anchor-preset').value = 'custom';
+    });
+
+    document.getElementById('ed-render-w').addEventListener('input', (e) => {
+      if (!selectedEntity) return;
+      selectedEntity.renderWidth = parseFloat(e.target.value) || 64;
+    });
+
+    document.getElementById('ed-render-h').addEventListener('input', (e) => {
+      if (!selectedEntity) return;
+      selectedEntity.renderHeight = parseFloat(e.target.value) || 64;
+    });
+
+    document.getElementById('ed-btn-center-cam').addEventListener('click', () => {
+      if (!selectedEntity) return;
+      centerCameraOn(selectedEntity.x + (selectedEntity.width / 2), selectedEntity.y + (selectedEntity.height / 2));
+    });
+
+    document.getElementById('ed-btn-deselect').addEventListener('click', () => {
+      selectEntity(null);
+    });
+
+    /* ========================================================================
        UI Controls & Event Bindings
        ======================================================================== */
 
     // Checkbox bindings
+    document.getElementById('chk-snap-grid').addEventListener('change', (e) => debug.snapToGrid = e.target.checked);
+    document.getElementById('chk-camera-follow').addEventListener('change', (e) => debug.cameraFollow = e.target.checked);
     document.getElementById('chk-grid').addEventListener('change', (e) => debug.grid = e.target.checked);
     document.getElementById('chk-hitbox').addEventListener('change', (e) => debug.hitbox = e.target.checked);
     document.getElementById('chk-anchor').addEventListener('change', (e) => debug.anchor = e.target.checked);
     document.getElementById('chk-bounds').addEventListener('change', (e) => debug.bounds = e.target.checked);
     document.getElementById('chk-collision').addEventListener('change', (e) => debug.collision = e.target.checked);
     document.getElementById('chk-water-solid').addEventListener('change', (e) => debug.waterSolid = e.target.checked);
+    document.getElementById('chk-shadows').addEventListener('change', (e) => debug.shadows = e.target.checked);
+    document.getElementById('rng-shadow-feather').addEventListener('input', (e) => {
+      const val = parseInt(e.target.value);
+      debug.shadowFeather = val / 100;
+      document.getElementById('lbl-shadow-feather').textContent = `${val}%`;
+    });
+
+    // Grass Flow & Gradient Smoothing Controls
+    const grassModeBtns = {
+      meander: document.getElementById('btn-grass-mode-meander'),
+      smudge: document.getElementById('btn-grass-mode-smudge'),
+      ribbons: document.getElementById('btn-grass-mode-ribbons'),
+      biome: document.getElementById('btn-grass-mode-biome')
+    };
+
+    function setGrassMode(mode) {
+      grassParams.mode = mode;
+      Object.keys(grassModeBtns).forEach(k => {
+        if (grassModeBtns[k]) grassModeBtns[k].classList.toggle('active', k === mode);
+      });
+
+      if (mode === 'meander') {
+        grassParams.meanderAmp = 35;
+        grassParams.waveFreq = 1.0;
+        grassParams.seamSmudge = 12;
+      } else if (mode === 'smudge') {
+        grassParams.meanderAmp = 20;
+        grassParams.waveFreq = 0.8;
+        grassParams.seamSmudge = 20;
+      } else if (mode === 'ribbons') {
+        grassParams.meanderAmp = 50;
+        grassParams.waveFreq = 1.3;
+        grassParams.seamSmudge = 10;
+      } else if (mode === 'biome') {
+        grassParams.meanderAmp = 30;
+        grassParams.waveFreq = 1.8;
+        grassParams.seamSmudge = 14;
+      }
+
+      document.getElementById('rng-meander-amp').value = grassParams.meanderAmp;
+      document.getElementById('lbl-meander-amp').textContent = `${grassParams.meanderAmp}px`;
+      document.getElementById('rng-meander-freq').value = Math.round(grassParams.waveFreq * 100);
+      document.getElementById('lbl-meander-freq').textContent = `${grassParams.waveFreq.toFixed(1)}x`;
+      document.getElementById('rng-seam-smudge').value = grassParams.seamSmudge;
+      document.getElementById('lbl-seam-smudge').textContent = `${grassParams.seamSmudge}px`;
+
+      updateGrassFlowCanvas();
+    }
+
+    if (grassModeBtns.meander) grassModeBtns.meander.addEventListener('click', () => setGrassMode('meander'));
+    if (grassModeBtns.smudge) grassModeBtns.smudge.addEventListener('click', () => setGrassMode('smudge'));
+    if (grassModeBtns.ribbons) grassModeBtns.ribbons.addEventListener('click', () => setGrassMode('ribbons'));
+    if (grassModeBtns.biome) grassModeBtns.biome.addEventListener('click', () => setGrassMode('biome'));
+
+    document.getElementById('rng-meander-amp').addEventListener('input', (e) => {
+      const val = parseInt(e.target.value);
+      grassParams.meanderAmp = val;
+      document.getElementById('lbl-meander-amp').textContent = `${val}px`;
+      updateGrassFlowCanvas();
+    });
+
+    document.getElementById('rng-meander-freq').addEventListener('input', (e) => {
+      const val = parseInt(e.target.value);
+      grassParams.waveFreq = val / 100;
+      document.getElementById('lbl-meander-freq').textContent = `${(val / 100).toFixed(1)}x`;
+      updateGrassFlowCanvas();
+    });
+
+    document.getElementById('rng-seam-smudge').addEventListener('input', (e) => {
+      const val = parseInt(e.target.value);
+      grassParams.seamSmudge = val;
+      document.getElementById('lbl-seam-smudge').textContent = `${val}px`;
+    });
+
+    const btnPureGrass = document.getElementById('btn-toggle-pure-grass');
+    const btnDirtPath = document.getElementById('btn-toggle-dirt-path');
+
+    if (btnPureGrass) {
+      btnPureGrass.addEventListener('click', () => {
+        resetTerrainMap(true);
+        btnPureGrass.classList.add('active');
+        if (btnDirtPath) btnDirtPath.classList.remove('active');
+      });
+    }
+
+    if (btnDirtPath) {
+      btnDirtPath.addEventListener('click', () => {
+        resetTerrainMap(false);
+        btnDirtPath.classList.add('active');
+        if (btnPureGrass) btnPureGrass.classList.remove('active');
+      });
+    }
 
     // Terrain Painter Brush Controls
     let activeBrush = null; // null = Play Mode, 0 = Grass, 1 = Dirt, 2 = Water, 3 = Sand
@@ -1346,7 +3441,8 @@
     brushButtons.water.addEventListener('click', () => setActiveBrush(TERRAIN_WATER, 'water'));
 
     document.getElementById('btn-reset-terrain').addEventListener('click', () => {
-      resetTerrainMap();
+      const isPure = btnPureGrass ? btnPureGrass.classList.contains('active') : true;
+      resetTerrainMap(isPure);
     });
 
     // Mouse painting on canvas
@@ -1362,7 +3458,10 @@
       const tx = Math.floor(canvasX / TILE_SIZE);
       const ty = Math.floor(canvasY / TILE_SIZE);
       if (tx >= 0 && tx < GRID_COLS && ty >= 0 && ty < GRID_ROWS) {
-        terrainMap[ty][tx] = activeBrush;
+        if (terrainMap[ty][tx] !== activeBrush) {
+          terrainMap[ty][tx] = activeBrush;
+          updateGrassFlowCanvas();
+        }
       }
     }
 
@@ -1384,36 +3483,90 @@
     });
 
     // Zoom controls
-    const btnZoom1x = document.getElementById('zoom-1x');
-    const btnZoom2x = document.getElementById('zoom-2x');
-
-    btnZoom1x.addEventListener('click', () => {
-      canvas.style.transform = 'scale(1)';
-      btnZoom1x.classList.add('active');
-      btnZoom2x.classList.remove('active');
-    });
-
-    btnZoom2x.addEventListener('click', () => {
-      canvas.style.transform = 'scale(1.5)';
-      btnZoom2x.classList.add('active');
-      btnZoom1x.classList.remove('active');
-    });
+    document.getElementById('zoom-05x').addEventListener('click', () => setZoom(0.5));
+    document.getElementById('zoom-1x').addEventListener('click', () => setZoom(1.0));
+    document.getElementById('zoom-15x').addEventListener('click', () => setZoom(1.5));
 
     document.getElementById('btn-reset-pos').addEventListener('click', () => {
+      player.tileX = 7;
+      player.tileY = 6;
+      player.startTileX = 7;
+      player.startTileY = 6;
+      player.targetTileX = 7;
+      player.targetTileY = 6;
       player.x = 7 * TILE_SIZE;
       player.y = 6 * TILE_SIZE;
       player.dir = DIR_DOWN;
+      player.isStepping = false;
+      player.isMoving = false;
 
       const rat = entities.find(e => e.id === 'river-rat-npc');
       if (rat) {
-        rat.x = 7 * TILE_SIZE;
+        rat.tileX = 9;
+        rat.tileY = 8;
+        rat.startTileX = 9;
+        rat.startTileY = 8;
+        rat.targetTileX = 9;
+        rat.targetTileY = 8;
+        rat.x = 9 * TILE_SIZE;
         rat.y = 8 * TILE_SIZE;
         rat.dir = DIR_DOWN;
         rat.wanderState = 'idle_center';
         rat.stateTimer = 1.0;
+        rat.isStepping = false;
         rat.isMoving = false;
         rat.animTime = 0;
       }
+
+      const blackRat = entities.find(e => e.id === 'black-rat-npc');
+      if (blackRat) {
+        blackRat.tileX = 3;
+        blackRat.tileY = 8;
+        blackRat.startTileX = 3;
+        blackRat.startTileY = 8;
+        blackRat.targetTileX = 3;
+        blackRat.targetTileY = 8;
+        blackRat.x = 3 * TILE_SIZE;
+        blackRat.y = 8 * TILE_SIZE;
+        blackRat.dir = DIR_RIGHT;
+        blackRat.wanderState = 'idle_center';
+        blackRat.stateTimer = 0.8;
+        blackRat.isStepping = false;
+        blackRat.isMoving = false;
+        blackRat.animTime = 0;
+      }
+
+      const p1 = entities.find(e => e.id === 'piranha-npc-1');
+      if (p1) {
+        p1.tileX = 25;
+        p1.tileY = 7;
+        p1.startTileX = 25;
+        p1.startTileY = 7;
+        p1.targetTileX = 25;
+        p1.targetTileY = 7;
+        p1.x = 25 * TILE_SIZE;
+        p1.y = 7 * TILE_SIZE;
+        p1.dir = DIR_LEFT;
+        p1.isStepping = false;
+        p1.wanderState = 'swimming';
+      }
+
+      const p2 = entities.find(e => e.id === 'piranha-npc-2');
+      if (p2) {
+        p2.tileX = 26;
+        p2.tileY = 15;
+        p2.startTileX = 26;
+        p2.startTileY = 15;
+        p2.targetTileX = 26;
+        p2.targetTileY = 15;
+        p2.x = 26 * TILE_SIZE;
+        p2.y = 15 * TILE_SIZE;
+        p2.dir = DIR_UP;
+        p2.isStepping = false;
+        p2.wanderState = 'swimming';
+      }
+
+      centerCameraOn(player.x + 32, player.y + 32);
     });
 
     // Preset selection
@@ -1439,6 +3592,10 @@
 
       document.getElementById('card-rukiya').classList.toggle('active', modelName === 'rukiya');
       document.getElementById('card-river-rat').classList.toggle('active', modelName === 'river-rat');
+
+      if (selectedEntity === player) {
+        selectEntity(player);
+      }
     };
 
     // Custom Sprite Upload & URL loading
@@ -1460,6 +3617,9 @@
         player.fps = fps;
         document.getElementById('card-rukiya').classList.remove('active');
         document.getElementById('card-river-rat').classList.remove('active');
+        if (selectedEntity === player) {
+          selectEntity(player);
+        }
       }
 
       if (fileUploader.files && fileUploader.files[0]) {
@@ -1476,6 +3636,12 @@
         img.src = inputUrl.value.trim();
       }
     });
+
+    // Populate entity dropdown on load
+    populateEntitySelect();
+
+    // Initial render of procedural out-of-sync sine grass flow field
+    updateGrassFlowCanvas();
 
     // Start Engine Loop
     requestAnimationFrame(gameLoop);

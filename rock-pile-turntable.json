@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "image": "rock-pile-turntable-palette.webp",
+  "imageWidth": 256,
+  "imageHeight": 128,
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "columns": 4,
+  "rows": 2,
+  "frameCount": 8,
+  "layout": "row-major",
+  "model": {
+    "name": "Rock Pile",
+    "source": "/models/lokarta-private/rock_pile_optimized.glb"
+  },
+  "capture": {
+    "mode": "still-turntable",
+    "cameraPitchDegrees": 45,
+    "transparentBackground": true,
+    "angleZeroDegrees": 0,
+    "angleConvention": "0° is the front view; increasing angles follow the application turntable order"
+  },
+  "encoding": {
+    "format": "WebP",
+    "paletteReduction": "adaptive median cut",
+    "maximumPaletteColors": 256,
+    "losslessAfterPaletteReduction": true,
+    "paletteColorsUsed": 256
+  },
+  "registrationPoint": {
+    "x": 32,
+    "y": 64,
+    "origin": "top-left",
+    "preset": "bottom-center"
+  },
+  "frames": [
+    {
+      "index": 0,
+      "label": "View 01 · 0°",
+      "direction": "view-1",
+      "directionName": "View 01 · 0°",
+      "state": "still",
+      "angleDegrees": 0,
+      "frameIndex": 0,
+      "x": 0,
+      "y": 0,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "index": 1,
+      "label": "View 02 · 45°",
+      "direction": "view-2",
+      "directionName": "View 02 · 45°",
+      "state": "still",
+      "angleDegrees": 45,
+      "frameIndex": 1,
+      "x": 64,
+      "y": 0,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "index": 2,
+      "label": "View 03 · 90°",
+      "direction": "view-3",
+      "directionName": "View 03 · 90°",
+      "state": "still",
+      "angleDegrees": 90,
+      "frameIndex": 2,
+      "x": 128,
+      "y": 0,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "index": 3,
+      "label": "View 04 · 135°",
+      "direction": "view-4",
+      "directionName": "View 04 · 135°",
+      "state": "still",
+      "angleDegrees": 135,
+      "frameIndex": 3,
+      "x": 192,
+      "y": 0,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "index": 4,
+      "label": "View 05 · 180°",
+      "direction": "view-5",
+      "directionName": "View 05 · 180°",
+      "state": "still",
+      "angleDegrees": 180,
+      "frameIndex": 4,
+      "x": 0,
+      "y": 64,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "index": 5,
+      "label": "View 06 · 225°",
+      "direction": "view-6",
+      "directionName": "View 06 · 225°",
+      "state": "still",
+      "angleDegrees": 225,
+      "frameIndex": 5,
+      "x": 64,
+      "y": 64,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "index": 6,
+      "label": "View 07 · 270°",
+      "direction": "view-7",
+      "directionName": "View 07 · 270°",
+      "state": "still",
+      "angleDegrees": 270,
+      "frameIndex": 6,
+      "x": 128,
+      "y": 64,
+      "width": 64,
+      "height": 64
+    },
+    {
+      "index": 7,
+      "label": "View 08 · 315°",
+      "direction": "view-8",
+      "directionName": "View 08 · 315°",
+      "state": "still",
+      "angleDegrees": 315,
+      "frameIndex": 7,
+      "x": 192,
+      "y": 64,
+      "width": 64,
+      "height": 64
+    }
+  ]
+}
