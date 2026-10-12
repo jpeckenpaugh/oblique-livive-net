@@ -583,7 +583,7 @@
             <span class="layer-color-tag" style="background: var(--layer-l2);"></span>
             <div>
               <div class="layer-title-text">[L2] Topsoil, Earth & Beach Sand</div>
-              <div class="layer-subtext">Continental mantle over bedrock: rich loam, packed trails & beach sand</div>
+              <div class="layer-subtext">Continental mantle over bedrock: rich loam, forest soil & beach dunes (pure natural terrain)</div>
             </div>
           </label>
           <div class="layer-actions">
@@ -658,16 +658,16 @@
       <div class="control-group">
         <div class="control-label-row">
           <span class="control-label">Water Flow UV Speed</span>
-          <span class="control-val" id="val-water-speed">1.00x</span>
+          <span class="control-val" id="val-water-speed">0.20x</span>
         </div>
-        <input type="range" class="slider-input" id="rng-water-speed" min="0.2" max="3.0" step="0.2" value="1.0">
+        <input type="range" class="slider-input" id="rng-water-speed" min="0.1" max="3.0" step="0.05" value="0.20">
       </div>
 
       <div class="control-group" style="margin-top: 10px;">
         <span class="control-label">Shoreline Foam Aesthetic</span>
         <div class="segmented-btn-group">
-          <button class="seg-btn active" id="btn-foam-pixel">Stylized Retro Pixel</button>
-          <button class="seg-btn" id="btn-foam-smooth">Smooth Organic Liquid</button>
+          <button class="seg-btn" id="btn-foam-pixel">Stylized Retro Pixel</button>
+          <button class="seg-btn active" id="btn-foam-smooth">Smooth Organic Liquid</button>
         </div>
       </div>
     </div>
@@ -773,8 +773,8 @@
       deepAlpha: 0.90,
       foamSpeed: 1.5,
       foamAmp: 14,
-      waterSpeed: 1.0,
-      foamAesthetic: 'pixel' // 'pixel' or 'smooth'
+      waterSpeed: 0.20,
+      foamAesthetic: 'smooth' // 'pixel' or 'smooth'
     },
     // Noise Generation
     noise: {
@@ -804,7 +804,7 @@
     { id: 1, col: 0, row: 0, name: 'Continental Forest', type: 'Land', icon: '🌲', badge: '#10b981', desc: 'Offscreen Continental Interior (North & West)' },
     { id: 2, col: 1, row: 0, name: 'North Coastal Bluff', type: 'Land', icon: '🌿', badge: '#10b981', desc: 'Inland Forest & Dunes (North extension)' },
     { id: 3, col: 2, row: 0, name: 'Northeast Sea', type: 'Water', icon: '🌊', badge: '#38bdf8', desc: 'Open Coastal Waters & Sandbars' },
-    { id: 4, col: 0, row: 1, name: 'West Headland', type: 'Land', icon: '⛰️', badge: '#10b981', desc: 'Western Plateau Trails (West extension)' },
+    { id: 4, col: 0, row: 1, name: 'West Headland', type: 'Land', icon: '⛰️', badge: '#10b981', desc: 'Western Forest Plateau (West extension)' },
     { id: 5, col: 1, row: 1, name: 'Beach Camp & Cove', type: 'Land', icon: '🏕️', badge: '#f59e0b', desc: 'Promontory Camp Hub, Pier & Dunes' },
     { id: 6, col: 2, row: 1, name: 'East Coastal Shallows', type: 'Water', icon: '💦', badge: '#38bdf8', desc: 'Pier Terminus, Tidal Reefs & Shallows' },
     { id: 7, col: 0, row: 2, name: 'Southwest Basin', type: 'Water', icon: '🌊', badge: '#38bdf8', desc: 'South-facing Oceanic Channel' },
@@ -1779,7 +1779,7 @@
     bakeBedrockLayer();
 
     // 2. Bake Topsoil, Earth & Beach Sand (Layer 2) & Biome Grass Field (Layer 3)
-    // Layer 2 is the continuous continental mantle over bedrock (inland loam, wagon trails & beach dunes).
+    // Layer 2 is the continuous continental mantle over bedrock (inland loam, riverbed & beach dunes).
     // Layer 3 (Biome / Grass Field) is temporarily cleared / empty as requested for substrate inspection.
     ctxL2.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     const imgDataL2 = ctxL2.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
@@ -1809,7 +1809,6 @@
         const wx = bx * BEDROCK_BLOCK;
 
         const elev = sampleElevation(wx, wy);
-        const trailInfo = getTrailInfo(wx, wy);
 
         // Retrieve bedrock geological classification and tectonic fracture flags
         const v = bedrockVoxels[yCols + bx];
@@ -1819,7 +1818,7 @@
         const ditherVal = BAYER_4X4[((by & 3) << 2) | (bx & 3)];
         const grainHash = hash2D(bx, by, seed + 511);
 
-        // --- Compute Layer 2: Continental Topsoil, Earth, Wagon Trails & Beach Sand ---
+        // --- Compute Layer 2: Continental Topsoil, Earth & Beach Sand ---
         let soilAlpha = 0;
         let r2 = 0, g2 = 0, b2 = 0;
 
@@ -1939,40 +1938,6 @@
               r2 = Math.round(mudR * (1 - bankT) + r2 * bankT);
               g2 = Math.round(mudG * (1 - bankT) + g2 * bankT);
               b2 = Math.round(mudB * (1 - bankT) + b2 * bankT);
-            }
-
-            // 4. PACKED DIRT TRAILS & WAGON HIGHWAYS WITH W-PROFILE
-            if (trailInfo.intensity > 0 && elev > ELEV_SHALLOW_WATER && (!rInfo || !rInfo.inWater)) {
-              const dirtGrain = (simplex.noise2D(wx * 0.07, wy * 0.07) + 1.0) * 0.5;
-              const pebbleNoise = simplex.noise2D(wx * 0.18, wy * 0.18);
-
-              let dirtR, dirtG, dirtB;
-              if (trailInfo.rut > 0.40) {
-                // Packed wheel ruts: compacted reddish clay/dirt
-                dirtR = Math.round(108 + dirtGrain * 16);
-                dirtG = Math.round(64  + dirtGrain * 12);
-                dirtB = Math.round(32  + dirtGrain * 8);
-              } else if (trailInfo.centerRidge > 0.30) {
-                // Center ridge between ruts: worn gravel earth
-                dirtR = Math.round(148 + dirtGrain * 20);
-                dirtG = Math.round(108 + dirtGrain * 16);
-                dirtB = Math.round(64  + dirtGrain * 12);
-              } else {
-                // Road shoulders / apron
-                dirtR = Math.round(162 + dirtGrain * 22);
-                dirtG = Math.round(128 + dirtGrain * 18);
-                dirtB = Math.round(82  + dirtGrain * 14);
-              }
-
-              // Scattered gravel pebbles
-              if (pebbleNoise > 0.72) {
-                dirtR += 32; dirtG += 30; dirtB += 26;
-              }
-
-              const blendT = Math.min(1.0, trailInfo.intensity * 1.35);
-              r2 = Math.round(r2 * (1 - blendT) + dirtR * blendT);
-              g2 = Math.round(g2 * (1 - blendT) + dirtG * blendT);
-              b2 = Math.round(b2 * (1 - blendT) + dirtB * blendT);
             }
 
             // Inland topsoil over bedrock fissures: soil settles into a dark damp sediment trough (Question 1)
@@ -2426,7 +2391,6 @@
     else if (curElev < ELEV_DEEP_WATER) substrateName = 'Deep Ocean 🌊';
     else if (curElev < ELEV_SHALLOW_WATER) substrateName = 'Shallow Water 💦';
     else if (curElev <= ELEV_SAND_EXTENT + 0.03) substrateName = 'Beach Sand 🏖️';
-    else if (getTrailInfo(player.x, player.y).intensity > 0.35) substrateName = 'Packed Trail 🛤️';
     document.getElementById('stat-player-substr').innerText = substrateName;
   }
 
@@ -2521,47 +2485,98 @@
     const foamAmp = config.water.foamAmp;
     const isPixelFoam = config.water.foamAesthetic === 'pixel';
 
-    // 2. Continuous Traveling Deep Ocean Swells
-    const swellTime = timeSec * waterSpeed * 1.4;
+    // Helper to stroke clipped ocean swell polylines with depth and crest highlight
+    function drawSwellPath(ctx, path) {
+      if (path.length < 2) return;
+      const avgAlpha = path.reduce((sum, p) => sum + p.alpha, 0) / path.length;
+
+      // Broad soft swell body
+      ctx.beginPath();
+      ctx.moveTo(path[0].x, path[0].y);
+      for (let i = 1; i < path.length; i++) {
+        ctx.lineTo(path[i].x, path[i].y);
+      }
+      ctx.strokeStyle = `rgba(147, 197, 253, ${(0.09 * avgAlpha).toFixed(3)})`;
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+
+      // Shimmering swell crest highlight
+      ctx.beginPath();
+      ctx.moveTo(path[0].x, path[0].y);
+      for (let i = 1; i < path.length; i++) {
+        ctx.lineTo(path[i].x, path[i].y);
+      }
+      ctx.strokeStyle = `rgba(224, 242, 254, ${(0.18 * avgAlpha).toFixed(3)})`;
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    }
+
+    // 2. Continuous Traveling Deep Ocean Swells (Rolling from Bottom-Right / SE toward Top-Left / NW)
+    // Physically stopped and reflected by the shoreline; strictly masked out over continental landmass
+    const ux = -0.76, uy = -0.65; // Inward propagation vector from SE to NW
+    const vx = -0.65, vy = 0.76;  // Orthogonal wavefront tangent vector
+    const cx = WORLD_WIDTH * 0.5;
+    const cy = WORLD_HEIGHT * 0.5;
+
     const numSwells = 12;
-    const worldDiag = WORLD_WIDTH + WORLD_HEIGHT;
+    const waveSpacing = 200;
+    const waveCycle = numSwells * waveSpacing;
+    const travelProgress = (timeSec * waterSpeed * 110) % waveCycle;
 
     for (let s = 0; s < numSwells; s++) {
-      const sOffset = ((s * 260 + swellTime * 70) % worldDiag) - 300;
-      targetCtx.beginPath();
-      let started = false;
+      // Swells roll inward from far open ocean (w < 0) toward coast (w > 0)
+      const w = ((s * waveSpacing + travelProgress) % waveCycle) - 1500;
+      const steps = 44;
 
-      const steps = 36;
+      let currentPath = [];
+
       for (let st = 0; st <= steps; st++) {
         const t = st / steps;
-        const px = sOffset - t * 800;
-        const py = t * (WORLD_HEIGHT + 200) - 100;
+        const v = (t - 0.5) * 2600;
+        const undulate = Math.sin(t * 7.5 + s * 1.5 + timeSec * 0.7) * 22;
+        const wx = cx + w * ux + v * vx + undulate * ux;
+        const wy = cy + w * uy + v * vy + undulate * uy;
 
-        // Traveling sinusoidal undulation
-        const undulate = Math.sin(t * 7.0 + swellTime * 1.8 + s * 1.2) * 26;
-        const wx = px + undulate;
-        const wy = py;
+        if (wx >= -40 && wx <= WORLD_WIDTH + 40 && wy >= -40 && wy <= WORLD_HEIGHT + 40) {
+          const elev = sampleElevation(wx, wy);
 
-        if (wx >= -50 && wx < WORLD_WIDTH + 50 && wy >= -50 && wy < WORLD_HEIGHT + 50) {
-          if (!started) {
-            targetCtx.moveTo(wx, wy);
-            started = true;
+          // Strictly ocean water only (elev < ELEV_SHALLOW_WATER = 0.44)
+          // Waves never cross onto the solid continental landmass!
+          if (elev < ELEV_SHALLOW_WATER) {
+            // Shoaling factor: waves gently fade and compress as they approach the shoreline
+            let alpha = 1.0;
+            if (elev >= ELEV_DEEP_WATER) {
+              const distToShore = ELEV_SHALLOW_WATER - elev; // [0, 0.16]
+              const shoalFade = Math.max(0, Math.min(1.0, distToShore / 0.12));
+
+              // Slight shoreline reflection: faint backwash pulse radiating outward from shore
+              const reflectPulse = Math.sin(timeSec * waterSpeed * 3.8 - distToShore * 42.0) * 0.16;
+              alpha = Math.max(0, Math.min(1.0, shoalFade + reflectPulse * (1.0 - shoalFade)));
+            }
+
+            if (alpha > 0.05) {
+              currentPath.push({ x: wx, y: wy, alpha });
+            } else {
+              if (currentPath.length >= 2) drawSwellPath(targetCtx, currentPath);
+              currentPath = [];
+            }
           } else {
-            targetCtx.lineTo(wx, wy);
+            // Land detected! Terminate swell stroke at the shoreline
+            if (currentPath.length >= 2) drawSwellPath(targetCtx, currentPath);
+            currentPath = [];
           }
+        } else {
+          if (currentPath.length >= 2) drawSwellPath(targetCtx, currentPath);
+          currentPath = [];
         }
       }
 
-      if (started) {
-        // Broad soft swell body
-        targetCtx.strokeStyle = 'rgba(147, 197, 253, 0.08)';
-        targetCtx.lineWidth = 8;
-        targetCtx.stroke();
-
-        // Shimmering swell crest highlight
-        targetCtx.strokeStyle = 'rgba(224, 242, 254, 0.16)';
-        targetCtx.lineWidth = 2;
-        targetCtx.stroke();
+      if (currentPath.length >= 2) {
+        drawSwellPath(targetCtx, currentPath);
       }
     }
 
@@ -3003,7 +3018,6 @@
     if (wx < 0 || wx >= WORLD_WIDTH || wy < 0 || wy >= WORLD_HEIGHT) return;
 
     const elev = getElevation(wx, wy);
-    const trail = getTrailIntensity(wx, wy);
 
     const sec = getSectorAt(wx, wy);
     document.getElementById('insp-pos').innerText = `X: ${wx}, Y: ${wy} [Sector ${sec.id}: ${sec.name} • ${sec.type} ${sec.icon}]`;
@@ -3055,8 +3069,6 @@
         soilTxt = 'Torn Open (Abyss Rift Chasm)';
       } else if ((v & VOXEL_FLAG_LIP) !== 0 && elev < ELEV_SHALLOW_WATER) {
         soilTxt = 'Basalt Lip Rim (Exposed)';
-      } else if (trail > 0.35) {
-        soilTxt = 'Packed Earth Wagon Trail (Active)';
       } else if (elev < ELEV_DEEP_WATER) {
         soilTxt = 'Oceanic Abyss Bedrock (No Soil)';
       } else if (elev < ELEV_SHALLOW_WATER) {
