@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2.5D Oblique Sprite Stacking Sandbox</title>
+  <style>
+    :root {
+      --bg-dark: #121417;
+      --panel-bg: #1c1f24;
+      --panel-border: #2c323a;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --code-bg: #0f1115;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Main Viewport */
+    #viewport-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 50%, #1a1d23 0%, #0d0e11 100%);
+    }
+
+    #canvas-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+      padding: 24px;
+    }
+
+    canvas {
+      background-color: #1a1c20;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px #2f343e;
+      border-radius: 4px;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      transition: transform 0.15s ease-out;
+    }
+
+    /* Top HUD / Controls bar */
+    #top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      background: rgba(28, 31, 36, 0.85);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--panel-border);
+      z-index: 10;
+    }
+
+    .title-group h1 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: #fff;
+    }
+
+    .title-group p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .hud-stats {
+      display: flex;
+      gap: 16px;
+      font-size: 0.8rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: #cbd5e1;
+    }
+
+    .stat-pill {
+      background: rgba(0, 0, 0, 0.4);
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid #333a44;
+    }
+
+    /* Right Sidebar Controls */
+    #sidebar {
+      width: 360px;
+      background-color: var(--panel-bg);
+      border-left: 1px solid var(--panel-border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      z-index: 20;
+    }
+
+    .section {
+      padding: 16px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .section-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Checkboxes */
+    .checkbox-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      font-size: 0.84rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .checkbox-item input {
+      margin-right: 10px;
+      accent-color: var(--accent);
+      cursor: pointer;
+      width: 15px;
+      height: 15px;
+    }
+
+    .color-legend {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    /* Buttons & Inputs */
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    button {
+      background: #272c35;
+      color: #f1f5f9;
+      border: 1px solid #3d4552;
+      padding: 7px 12px;
+      font-size: 0.82rem;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-weight: 500;
+    }
+
+    button:hover {
+      background: #323844;
+      border-color: #4f5969;
+    }
+
+    button.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+      width: 100%;
+    }
+
+    button.primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.76rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    input[type="text"], input[type="number"], select {
+      width: 100%;
+      background: #121417;
+      border: 1px solid #333a44;
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 0.82rem;
+      font-family: inherit;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    /* Quick Preset Buttons */
+    .preset-card {
+      background: #14161b;
+      border: 1px solid #2b303a;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .preset-card:hover {
+      border-color: var(--accent);
+      background: #171a21;
+    }
+
+    .preset-card.active {
+      border-color: var(--accent);
+      background: rgba(59, 130, 246, 0.12);
+    }
+
+    .preset-card h4 {
+      font-size: 0.85rem;
+      margin-bottom: 3px;
+    }
+
+    .preset-card p {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .info-callout {
+      background: rgba(59, 130, 246, 0.08);
+      border-left: 3px solid var(--accent);
+      padding: 10px 12px;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.76rem;
+      color: #cbd5e1;
+      line-height: 1.45;
+    }
+
+    .key-badge {
+      display: inline-block;
+      background: #2c323a;
+      border: 1px solid #475161;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Main Viewport Area -->
+  <div id="viewport-container">
+    <div id="top-bar">
+      <div class="title-group">
+        <h1>2.5D Oblique Sprite Stacking Sandbox</h1>
+        <p>15×12 Orthogonal Grid • 64×64 Footprints • Dynamic Y-Sorting Depth</p>
+      </div>
+      <div class="hud-stats">
+        <div class="stat-pill" id="stat-fps">FPS: 60</div>
+        <div class="stat-pill" id="stat-player-tile">Tile: (7, 6)</div>
+        <div class="stat-pill" id="stat-depth-count">Renderables: 5</div>
+      </div>
+    </div>
+
+    <div id="canvas-wrapper">
+      <canvas id="gameCanvas" width="960" height="768"></canvas>
+    </div>
+  </div>
+
+  <!-- Sidebar UI / Controls -->
+  <div id="sidebar">
+
+    <!-- Instructions / Controls -->
+    <div class="section">
+      <div class="section-title">Controls</div>
+      <div class="info-callout">
+        Use <span class="key-badge">W</span> <span class="key-badge">A</span> <span class="key-badge">S</span> <span class="key-badge">D</span> or Arrow Keys to walk.
+        <br>Walk <strong>behind</strong> the palm tree & house to test occlusion, and <strong>in front</strong> to test foreground stacking.
+      </div>
+    </div>
+
+    <!-- Debug Overlays -->
+    <div class="section">
+      <div class="section-title">Debug Overlays</div>
+      <div class="checkbox-list">
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-grid" checked>
+          <span>Show Grid Lines</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-hitbox" checked>
+          <span><span class="color-legend" style="background: #ef4444;"></span>64×64 Footprint Hitboxes</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-anchor" checked>
+          <span><span class="color-legend" style="background: #eab308;"></span>Registration Anchor (Bottom-Center)</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-bounds" checked>
+          <span><span class="color-legend" style="background: #06b6d4;"></span>Sprite Bounding Box (128×128)</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-collision" checked>
+          <span>Solid Obstacle Collision</span>
+        </label>
+      </div>
+
+      <div style="margin-top: 14px;">
+        <label>Pixel Zoom Scale</label>
+        <div class="btn-group">
+          <button id="zoom-1x" class="active">1x</button>
+          <button id="zoom-2x">2x Scale</button>
+          <button id="btn-reset-pos">Reset Positions</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Player Preset -->
+    <div class="section">
+      <div class="section-title">Player Character Sprite</div>
+      <div class="preset-card active" id="card-rukiya" onclick="setPlayerModel('rukiya')">
+        <h4>Rukiya (Humanoid)</h4>
+        <p>1024×640 sheet (8 cols × 5 rows, 128×128 frames, 8 FPS walk cycle)</p>
+      </div>
+      <div class="preset-card" id="card-river-rat" onclick="setPlayerModel('river-rat')">
+        <h4>River Rat (Quadruped)</h4>
+        <p>1024×640 sheet (128×128 frames, centered mid-body on tile)</p>
+      </div>
+    </div>
+
+    <!-- Custom Sprite Sheet Injector -->
+    <div class="section">
+      <div class="section-title">Custom Sprite Sheet Injector</div>
+      <div class="form-group">
+        <label>Select Local Image (PNG / WebP)</label>
+        <input type="file" id="file-uploader" accept="image/*">
+      </div>
+      <div class="form-group">
+        <label>Or Image URL</label>
+        <input type="text" id="input-url" placeholder="Enter relative or https:// URL">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Frame Width (px)</label>
+          <input type="number" id="cfg-frame-w" value="128">
+        </div>
+        <div class="form-group">
+          <label>Frame Height (px)</label>
+          <input type="number" id="cfg-frame-h" value="128">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>FPS</label>
+          <input type="number" id="cfg-fps" value="8">
+        </div>
+        <div class="form-group">
+          <label>Row Order Preset</label>
+          <select id="cfg-preset-row">
+            <option value="standard">Down, Right, Up, Left</option>
+            <option value="single">Single Row</option>
+          </select>
+        </div>
+      </div>
+      <button class="primary" id="btn-apply-custom">Load Custom Sprite</button>
+    </div>
+
+    <!-- Props in Scene -->
+    <div class="section">
+      <div class="section-title">Scene Props & NPCs</div>
+      <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.5;">
+        <div style="margin-bottom: 6px;">• <strong>Tropical Palm Tree</strong>: Tile (7, 4) — 128×128 (anchored at base)</div>
+        <div style="margin-bottom: 6px;">• <strong>Fisher's House</strong>: Tiles (2, 2) to (3, 3) — 256×256 sprite (double size, 4-tile solid footprint)</div>
+        <div style="margin-bottom: 6px;">• <strong>Wooden Barrel</strong>: Tile (5, 6) — 64×64 sprite (half size, solid obstacle)</div>
+        <div style="margin-bottom: 6px;">• <strong>NPC River Rat</strong>: Tile (7, 8) — 128×128 quadruped (centered mid-body in tile, nose/tail extend outward)</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    /* ========================================================================
+       2.5D Oblique Stacking Engine Implementation
+       ======================================================================== */
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Grid specifications
+    const TILE_SIZE = 64;
+    const GRID_COLS = 15;
+    const GRID_ROWS = 12;
+    canvas.width = GRID_COLS * TILE_SIZE; // 960
+    canvas.height = GRID_ROWS * TILE_SIZE; // 768
+
+    // Debug flags
+    const debug = {
+      grid: true,
+      hitbox: true,
+      anchor: true,
+      bounds: true,
+      collision: true
+    };
+
+    // Asset Manager & Image Preloader
+    const assets = {};
+    function loadImage(name, src) {
+      const img = new Image();
+      img.src = src;
+      assets[name] = img;
+      return img;
+    }
+
+    loadImage('rukiya', 'rukiya-walking-walking-animation-palette.webp');
+    loadImage('river-rat', 'river-rat-walking-armature-unreal-take-baselayer-animation-palette.webp');
+    loadImage('palm-tree', 'tropical-palm-tree-turntable-palette.webp');
+    loadImage('house', 'fishers-house-turntable-palette.webp');
+    loadImage('barrel', 'wooden-barrel-turntable-palette.webp');
+
+    // Directions: 0: Down/Front, 1: Right, 2: Up/Back, 3: Left
+    const DIR_DOWN = 0;
+    const DIR_RIGHT = 1;
+    const DIR_UP = 2;
+    const DIR_LEFT = 3;
+
+    // Player Entity state
+    const player = {
+      x: 7 * TILE_SIZE, // Footprint top-left X in pixels
+      y: 6 * TILE_SIZE, // Footprint top-left Y in pixels
+      width: 64,       // Footprint width
+      height: 64,      // Footprint height
+      speed: 160,      // Pixels per second
+      dir: DIR_DOWN,
+      isMoving: false,
+      animTime: 0,
+      activeModel: 'rukiya',
+      // Custom config support
+      customImg: null,
+      customConfig: null,
+      // Sprite Frame Specs
+      frameWidth: 128,
+      frameHeight: 128,
+      renderWidth: 128,
+      renderHeight: 128,
+      anchorX: 64,
+      anchorY: 128,
+      anchorPreset: 'bottom-center',
+      fps: 8,
+      totalWalkFrames: 8
+    };
+
+    // Static Props and NPCs
+    const entities = [
+      {
+        id: 'house',
+        name: "Fisher's House",
+        type: 'prop',
+        tileX: 2,
+        tileY: 2,
+        x: 2 * TILE_SIZE,
+        y: 2 * TILE_SIZE,
+        width: 128,        // 2 tiles wide
+        height: 128,       // 2 tiles high (occupies 4 tiles)
+        solid: true,
+        asset: 'house',
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 256,  // Double size
+        renderHeight: 256,
+        anchorX: 128,
+        anchorY: 256,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'palm-tree',
+        name: 'Tropical Palm Tree',
+        type: 'prop',
+        tileX: 7,
+        tileY: 4,
+        x: 7 * TILE_SIZE,
+        y: 4 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'palm-tree',
+        frameX: 0, // Front view
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 128,
+        renderHeight: 128,
+        anchorX: 64,
+        anchorY: 128,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'barrel',
+        name: 'Wooden Barrel',
+        type: 'prop',
+        tileX: 5,
+        tileY: 6,
+        x: 5 * TILE_SIZE,
+        y: 6 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: true,
+        asset: 'barrel',
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 64,   // Half size
+        renderHeight: 64,
+        anchorX: 32,
+        anchorY: 64,
+        anchorPreset: 'bottom-center'
+      },
+      {
+        id: 'river-rat-npc',
+        name: 'River Rat (NPC)',
+        type: 'npc',
+        tileX: 7,
+        tileY: 8,
+        x: 7 * TILE_SIZE,
+        y: 8 * TILE_SIZE,
+        width: 64,
+        height: 64,
+        solid: false,
+        asset: 'river-rat',
+        animTime: 0,
+        fps: 8,
+        dir: DIR_UP, // Facing back towards the player
+        frameWidth: 128,
+        frameHeight: 128,
+        renderWidth: 128,
+        renderHeight: 128,
+        anchorX: 64,
+        anchorY: 64,       // Center anchor for quadruped mid-body
+        anchorPreset: 'center'
+      }
+    ];
+
+    // Input Handling
+    const keys = {};
+    window.addEventListener('keydown', (e) => {
+      keys[e.key.toLowerCase()] = true;
+      if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+      }
+    });
+    window.addEventListener('keyup', (e) => {
+      keys[e.key.toLowerCase()] = false;
+    });
+
+    // Collision Detection between AABB footprints
+    function checkCollision(targetX, targetY, selfWidth, selfHeight) {
+      if (!debug.collision) return false;
+
+      // Map boundary collision
+      if (targetX < 0 || targetX + selfWidth > canvas.width) return true;
+      if (targetY < 0 || targetY + selfHeight > canvas.height) return true;
+
+      // Obstacle collision (using a slightly forgiving 48x48 core box)
+      const pad = 8;
+      const box = {
+        left: targetX + pad,
+        right: targetX + selfWidth - pad,
+        top: targetY + pad,
+        bottom: targetY + selfHeight - pad
+      };
+
+      for (const ent of entities) {
+        if (!ent.solid) continue;
+        const entBox = {
+          left: ent.x + pad,
+          right: ent.x + ent.width - pad,
+          top: ent.y + pad,
+          bottom: ent.y + ent.height - pad
+        };
+
+        if (box.left < entBox.right &&
+            box.right > entBox.left &&
+            box.top < entBox.bottom &&
+            box.bottom > entBox.top) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // Update Player Movement & State
+    function updatePlayer(dt) {
+      let vx = 0;
+      let vy = 0;
+
+      if (keys['w'] || keys['arrowup']) vy -= 1;
+      if (keys['s'] || keys['arrowdown']) vy += 1;
+      if (keys['a'] || keys['arrowleft']) vx -= 1;
+      if (keys['d'] || keys['arrowright']) vx += 1;
+
+      if (vx !== 0 || vy !== 0) {
+        player.isMoving = true;
+        player.animTime += dt;
+
+        // Determine face direction
+        if (vy > 0) player.dir = DIR_DOWN;
+        else if (vy < 0) player.dir = DIR_UP;
+        else if (vx > 0) player.dir = DIR_RIGHT;
+        else if (vx < 0) player.dir = DIR_LEFT;
+
+        // Normalize diagonal speed
+        let moveDist = player.speed * dt;
+        if (vx !== 0 && vy !== 0) {
+          moveDist *= 0.7071;
+        }
+
+        const nextX = player.x + vx * moveDist;
+        const nextY = player.y + vy * moveDist;
+
+        // Slide along walls (separate X and Y checks)
+        if (!checkCollision(nextX, player.y, player.width, player.height)) {
+          player.x = nextX;
+        }
+        if (!checkCollision(player.x, nextY, player.width, player.height)) {
+          player.y = nextY;
+        }
+      } else {
+        player.isMoving = false;
+        player.animTime = 0;
+      }
+    }
+
+    // Render floor grid
+    function renderGroundGrid() {
+      for (let r = 0; r < GRID_ROWS; r++) {
+        for (let c = 0; c < GRID_COLS; c++) {
+          const gx = c * TILE_SIZE;
+          const gy = r * TILE_SIZE;
+
+          // Alternating subtle checkerboard
+          const isEven = (c + r) % 2 === 0;
+          ctx.fillStyle = isEven ? '#242830' : '#1c1f24';
+          ctx.fillRect(gx, gy, TILE_SIZE, TILE_SIZE);
+
+          // Grid lines
+          if (debug.grid) {
+            ctx.strokeStyle = '#2f3540';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(gx + 0.5, gy + 0.5, TILE_SIZE, TILE_SIZE);
+          }
+        }
+      }
+    }
+
+    // Main Render Loop
+    let lastTime = performance.now();
+    let frameCounter = 0;
+    let fpsTimer = 0;
+    let currentFps = 60;
+
+    function gameLoop(now) {
+      const dt = Math.min((now - lastTime) / 1000, 0.1);
+      lastTime = now;
+
+      // Update FPS counter
+      frameCounter++;
+      fpsTimer += dt;
+      if (fpsTimer >= 0.5) {
+        currentFps = Math.round(frameCounter / fpsTimer);
+        document.getElementById('stat-fps').textContent = `FPS: ${currentFps}`;
+        frameCounter = 0;
+        fpsTimer = 0;
+      }
+
+      // Update positions
+      updatePlayer(dt);
+
+      // Update NPC animation timer
+      for (const ent of entities) {
+        if (ent.type === 'npc') {
+          ent.animTime = (ent.animTime || 0) + dt;
+        }
+      }
+
+      // Clear canvas
+      ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 1. Draw Background Ground Tiles
+      renderGroundGrid();
+
+      // 2. Gather All Renderable Entities for Depth Sorting
+      const renderList = [];
+
+      // Add static props and NPCs
+      for (const ent of entities) {
+        renderList.push({
+          entity: ent,
+          footX: ent.x,
+          footY: ent.y,
+          depthY: ent.y + ent.height // Bottom of foot represents depth
+        });
+      }
+
+      // Add Player
+      renderList.push({
+        entity: player,
+        isPlayer: true,
+        footX: player.x,
+        footY: player.y,
+        depthY: player.y + player.height
+      });
+
+      // 3. Y-Sorting (Lowest Y rendered first, Highest Y rendered last on top)
+      renderList.sort((a, b) => a.depthY - b.depthY);
+
+      document.getElementById('stat-depth-count').textContent = `Renderables: ${renderList.length}`;
+      const currentTileX = Math.floor((player.x + 32) / TILE_SIZE);
+      const currentTileY = Math.floor((player.y + 32) / TILE_SIZE);
+      document.getElementById('stat-player-tile').textContent = `Tile: (${currentTileX}, ${currentTileY})`;
+
+      // 4. Draw Sorted Entities
+      for (const item of renderList) {
+        if (item.isPlayer) {
+          renderPlayerSprite(item.footX, item.footY);
+        } else {
+          renderEntitySprite(item.entity);
+        }
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Render Entity Sprite
+    function renderEntitySprite(ent) {
+      const img = assets[ent.asset];
+      const fw = ent.frameWidth || 128;
+      const fh = ent.frameHeight || 128;
+      const rw = ent.renderWidth || fw;
+      const rh = ent.renderHeight || fh;
+      const anchorX = ent.anchorX !== undefined ? ent.anchorX : rw / 2;
+      const anchorY = ent.anchorY !== undefined ? ent.anchorY : (ent.anchorPreset === 'center' ? rh / 2 : rh);
+
+      // Placement formula:
+      // If centered: anchor aligns with center of ground footprint
+      // If bottom-center: anchor aligns with bottom-center of ground footprint
+      let screenX, screenY;
+      if (ent.anchorPreset === 'center') {
+        screenX = Math.round(ent.x + (ent.width / 2) - anchorX);
+        screenY = Math.round(ent.y + (ent.height / 2) - anchorY);
+      } else {
+        screenX = Math.round(ent.x + (ent.width / 2) - anchorX);
+        screenY = Math.round(ent.y + ent.height - anchorY);
+      }
+
+      // Determine frame coordinates in sprite sheet
+      let srcX = ent.frameX || 0;
+      let srcY = ent.frameY || 0;
+
+      if (ent.type === 'npc') {
+        const frameIndex = Math.floor(ent.animTime * (ent.fps || 8)) % 8;
+        srcX = frameIndex * fw;
+        srcY = ent.dir * fh;
+      }
+
+      // Draw sprite image or fallback placeholder
+      if (img && img.complete && img.naturalWidth > 0) {
+        ctx.drawImage(img, srcX, srcY, fw, fh, screenX, screenY, rw, rh);
+      } else {
+        // Fallback placeholder
+        ctx.fillStyle = ent.solid ? '#ca8a04' : '#16a34a';
+        ctx.fillRect(screenX + 8, screenY + 8, rw - 16, rh - 16);
+        ctx.fillStyle = '#fff';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(ent.name, screenX + rw / 2, screenY + rh / 2);
+      }
+
+      // Debug Overlays
+      drawDebugVisuals(ent.x, ent.y, ent.width, ent.height, screenX, screenY, rw, rh, anchorX, anchorY);
+    }
+
+    // Render Player Sprite
+    function renderPlayerSprite(footX, footY) {
+      const p = player;
+      let img = p.customImg || assets[p.activeModel];
+
+      const fw = p.frameWidth;
+      const fh = p.frameHeight;
+      const rw = p.renderWidth || fw;
+      const rh = p.renderHeight || fh;
+      const anchorX = p.anchorX;
+      const anchorY = p.anchorY;
+
+      // Placement formula:
+      let screenX, screenY;
+      if (p.anchorPreset === 'center') {
+        screenX = Math.round(footX + (p.width / 2) - anchorX);
+        screenY = Math.round(footY + (p.height / 2) - anchorY);
+      } else {
+        screenX = Math.round(footX + (p.width / 2) - anchorX);
+        screenY = Math.round(footY + p.height - anchorY);
+      }
+
+      // Frame selection:
+      // Row 0: Down (0°), Row 1: Right (90°), Row 2: Up (180°), Row 3: Left (270°)
+      const frameIndex = p.isMoving ? Math.floor(p.animTime * p.fps) % p.totalWalkFrames : 0;
+      const srcX = frameIndex * fw;
+      const srcY = p.dir * fh;
+
+      if (img && img.complete && img.naturalWidth > 0) {
+        ctx.drawImage(img, srcX, srcY, fw, fh, screenX, screenY, rw, rh);
+      } else {
+        // Fallback procedural player
+        ctx.fillStyle = '#3b82f6';
+        ctx.fillRect(screenX + 16, screenY + 16, rw - 32, rh - 32);
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Player', screenX + rw / 2, screenY + rh / 2);
+      }
+
+      // Debug Overlays
+      drawDebugVisuals(footX, footY, p.width, p.height, screenX, screenY, rw, rh, anchorX, anchorY);
+    }
+
+    // Debug overlays renderer
+    function drawDebugVisuals(footX, footY, footW, footH, screenX, screenY, rw, rh, anchorX, anchorY) {
+      // 1. Footprint Hitbox (Red outline around ground tile footprint)
+      if (debug.hitbox) {
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(footX + 0.5, footY + 0.5, footW - 1, footH - 1);
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
+        ctx.fillRect(footX + 1, footY + 1, footW - 2, footH - 2);
+      }
+
+      // 2. Sprite Bounding Box (Cyan outline around entire rendered frame)
+      if (debug.bounds) {
+        ctx.strokeStyle = '#06b6d4';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(screenX + 0.5, screenY + 0.5, rw - 1, rh - 1);
+      }
+
+      // 3. Sprite Registration Anchor Point (Yellow dot)
+      if (debug.anchor) {
+        const ax = screenX + anchorX;
+        const ay = screenY + anchorY;
+        ctx.fillStyle = '#eab308';
+        ctx.beginPath();
+        ctx.arc(ax, ay, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+
+    /* ========================================================================
+       UI Controls & Event Bindings
+       ======================================================================== */
+
+    // Checkbox bindings
+    document.getElementById('chk-grid').addEventListener('change', (e) => debug.grid = e.target.checked);
+    document.getElementById('chk-hitbox').addEventListener('change', (e) => debug.hitbox = e.target.checked);
+    document.getElementById('chk-anchor').addEventListener('change', (e) => debug.anchor = e.target.checked);
+    document.getElementById('chk-bounds').addEventListener('change', (e) => debug.bounds = e.target.checked);
+    document.getElementById('chk-collision').addEventListener('change', (e) => debug.collision = e.target.checked);
+
+    // Zoom controls
+    const btnZoom1x = document.getElementById('zoom-1x');
+    const btnZoom2x = document.getElementById('zoom-2x');
+
+    btnZoom1x.addEventListener('click', () => {
+      canvas.style.transform = 'scale(1)';
+      btnZoom1x.classList.add('active');
+      btnZoom2x.classList.remove('active');
+    });
+
+    btnZoom2x.addEventListener('click', () => {
+      canvas.style.transform = 'scale(1.5)';
+      btnZoom2x.classList.add('active');
+      btnZoom1x.classList.remove('active');
+    });
+
+    document.getElementById('btn-reset-pos').addEventListener('click', () => {
+      player.x = 7 * TILE_SIZE;
+      player.y = 6 * TILE_SIZE;
+      player.dir = DIR_DOWN;
+    });
+
+    // Preset selection
+    window.setPlayerModel = function(modelName) {
+      player.activeModel = modelName;
+      player.customImg = null;
+      player.frameWidth = 128;
+      player.frameHeight = 128;
+      player.renderWidth = 128;
+      player.renderHeight = 128;
+      player.fps = 8;
+      player.totalWalkFrames = 8;
+
+      if (modelName === 'river-rat') {
+        player.anchorX = 64;
+        player.anchorY = 64; // Centered mid-body anchor for quadruped
+        player.anchorPreset = 'center';
+      } else {
+        player.anchorX = 64;
+        player.anchorY = 128; // Bottom-center anchor for humanoid
+        player.anchorPreset = 'bottom-center';
+      }
+
+      document.getElementById('card-rukiya').classList.toggle('active', modelName === 'rukiya');
+      document.getElementById('card-river-rat').classList.toggle('active', modelName === 'river-rat');
+    };
+
+    // Custom Sprite Upload & URL loading
+    const fileUploader = document.getElementById('file-uploader');
+    const inputUrl = document.getElementById('input-url');
+    const btnApplyCustom = document.getElementById('btn-apply-custom');
+
+    btnApplyCustom.addEventListener('click', () => {
+      const fw = parseInt(document.getElementById('cfg-frame-w').value) || 128;
+      const fh = parseInt(document.getElementById('cfg-frame-h').value) || 128;
+      const fps = parseInt(document.getElementById('cfg-fps').value) || 8;
+
+      function applyImage(img) {
+        player.customImg = img;
+        player.frameWidth = fw;
+        player.frameHeight = fh;
+        player.anchorX = fw / 2;
+        player.anchorY = fh;
+        player.fps = fps;
+        document.getElementById('card-rukiya').classList.remove('active');
+        document.getElementById('card-river-rat').classList.remove('active');
+      }
+
+      if (fileUploader.files && fileUploader.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => applyImage(img);
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(fileUploader.files[0]);
+      } else if (inputUrl.value.trim()) {
+        const img = new Image();
+        img.onload = () => applyImage(img);
+        img.src = inputUrl.value.trim();
+      }
+    });
+
+    // Start Engine Loop
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
