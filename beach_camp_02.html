@@ -1,0 +1,3107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beach Camp Substrate 02 (No Sea Foam)</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>">
+  <style>
+    :root {
+      --bg-dark: #0a0c10;
+      --panel-bg: #13171f;
+      --panel-card: #1a202c;
+      --panel-border: #2d3748;
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --code-bg: #090d16;
+      --layer-l1: #64748b;
+      --layer-l2: #d97706;
+      --layer-l3: #22c55e;
+      --layer-l4: #06b6d4;
+      --layer-l5: #ec4899;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* Main Viewport Container */
+    #viewport-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 50%, #151a24 0%, #080a0e 100%);
+    }
+
+    #top-bar {
+      height: 52px;
+      background: rgba(19, 23, 31, 0.95);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--panel-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 10;
+    }
+
+    .title-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .title-badge {
+      background: linear-gradient(135deg, #0284c7, #38bdf8);
+      color: #031326;
+      font-weight: 800;
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .title-group h1 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #f8fafc;
+      letter-spacing: -0.2px;
+    }
+
+    .title-group p {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-left: 6px;
+    }
+
+    .hud-stats {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stat-pill {
+      background: #0f131a;
+      border: 1px solid #232a38;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.75rem;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .stat-pill span.label {
+      color: #64748b;
+      font-weight: 500;
+    }
+
+    #canvas-wrapper {
+      flex: 1;
+      position: relative;
+      overflow: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      cursor: grab;
+    }
+
+    #canvas-wrapper:active {
+      cursor: grabbing;
+    }
+
+    canvas#worldCanvas {
+      background-color: #090c12;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px #222938;
+      border-radius: 6px;
+      image-rendering: auto;
+      transition: transform 0.1s ease-out;
+      transform-origin: center center;
+    }
+
+    /* Floating Viewport Overlay Toolbar */
+    .viewport-toolbar {
+      position: absolute;
+      bottom: 20px;
+      left: 24px;
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(10px);
+      border: 1px solid #334155;
+      padding: 6px 10px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      z-index: 10;
+    }
+
+    .viewport-toolbar button {
+      background: #1e293b;
+      border: 1px solid #475569;
+      color: #e2e8f0;
+      padding: 4px 10px;
+      border-radius: 5px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .viewport-toolbar button:hover {
+      background: #334155;
+      color: #fff;
+    }
+
+    .viewport-toolbar button.active {
+      background: var(--accent);
+      color: #031326;
+      border-color: var(--accent);
+    }
+
+    /* Sidebar Inspector */
+    #sidebar {
+      width: 380px;
+      background: var(--panel-bg);
+      border-left: 1px solid var(--panel-border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      z-index: 20;
+    }
+
+    .sidebar-section {
+      padding: 16px 18px;
+      border-bottom: 1px solid #1f2735;
+    }
+
+    .sidebar-section:last-child {
+      border-bottom: none;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Layer Items Matrix */
+    .layer-card {
+      background: var(--panel-card);
+      border: 1px solid #283344;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      overflow: hidden;
+      transition: border-color 0.15s, background-color 0.15s;
+    }
+
+    .layer-card.disabled {
+      opacity: 0.45;
+      border-color: #1e2530;
+      background: #11151c;
+    }
+
+    .layer-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+    }
+
+    .layer-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      flex: 1;
+    }
+
+    .layer-color-tag {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    .layer-title-text {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    .layer-subtext {
+      font-size: 0.68rem;
+      color: #64748b;
+      margin-top: 1px;
+    }
+
+    .layer-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-solo {
+      background: #202838;
+      border: 1px solid #37445a;
+      color: #94a3b8;
+      font-size: 0.68rem;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      transition: all 0.12s ease;
+    }
+
+    .btn-solo:hover {
+      background: #2e3b52;
+      color: #f8fafc;
+      border-color: #4b5e7d;
+    }
+
+    .btn-solo.active {
+      background: #f59e0b;
+      color: #1c1917;
+      border-color: #f59e0b;
+      font-weight: 700;
+    }
+
+    .checkbox-toggle {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    /* Preset Buttons Grid */
+    .preset-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .btn-preset {
+      background: #1a2230;
+      border: 1px solid #2d3b50;
+      color: #cbd5e1;
+      padding: 6px 8px;
+      border-radius: 5px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+    }
+
+    .btn-preset:hover {
+      background: #253347;
+      color: #fff;
+      border-color: #3b82f6;
+    }
+
+    /* Sliders & Controls */
+    .control-group {
+      margin-bottom: 12px;
+    }
+
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .control-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .control-label {
+      font-size: 0.74rem;
+      font-weight: 500;
+      color: #cbd5e1;
+    }
+
+    .control-val {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .slider-input {
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: #222b3a;
+      accent-color: var(--accent);
+      cursor: pointer;
+      outline: none;
+    }
+
+    .segmented-btn-group {
+      display: flex;
+      background: #0f141d;
+      padding: 2px;
+      border-radius: 6px;
+      border: 1px solid #252d3d;
+      margin-top: 4px;
+    }
+
+    .seg-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 5px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+
+    .seg-btn.active {
+      background: #1e293b;
+      color: #38bdf8;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Substrate Pixel Inspector HUD */
+    .inspector-box {
+      background: #0a0d14;
+      border: 1px solid #1f2738;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.72rem;
+      line-height: 1.5;
+    }
+
+    .inspector-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      padding-bottom: 3px;
+      border-bottom: 1px dashed #171e2c;
+    }
+
+    .inspector-row:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+
+    .insp-label {
+      color: #64748b;
+    }
+
+    .insp-val {
+      color: #e2e8f0;
+      font-weight: 600;
+    }
+
+    .key-badge {
+      display: inline-block;
+      background: #1e293b;
+      border: 1px solid #475569;
+      color: #38bdf8;
+      font-family: monospace;
+      font-size: 0.7rem;
+      padding: 1px 5px;
+      border-radius: 3px;
+      margin: 0 2px;
+    }
+
+    /* Toast Notification */
+    #toast {
+      position: absolute;
+      top: 64px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid #38bdf8;
+      color: #f8fafc;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.25s, transform 0.25s;
+      z-index: 100;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(4px);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Main Viewport Area -->
+  <div id="viewport-container">
+    <div id="top-bar">
+      <div class="title-group">
+        <span class="title-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3);">Beach Camp</span>
+        <h1>Beach Camp — Continental Headland (SE Corner)</h1>
+        <p>Sectors 1,2,4,5 Continental Landmass • Sectors 3,6,7,8,9 Surrounding Ocean</p>
+      </div>
+      <div class="hud-stats">
+        <div class="stat-pill"><span class="label">FPS</span> <span id="stat-fps">60</span></div>
+        <div class="stat-pill"><span class="label">Sector</span> <span id="stat-sector" style="color: #fbbf24;">Sec 5: Beach Camp 🏕️</span></div>
+        <div class="stat-pill"><span class="label">Player</span> <span id="stat-player-pos">(15, 12)</span></div>
+        <div class="stat-pill"><span class="label">Substrate</span> <span id="stat-player-substr">Grass</span></div>
+      </div>
+    </div>
+
+    <div id="canvas-wrapper">
+      <canvas id="worldCanvas" width="1920" height="1536"></canvas>
+
+      <!-- Viewport Floating Controls -->
+      <div class="viewport-toolbar">
+        <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 600; margin-right: 4px;">ZOOM</span>
+        <button id="btn-zoom-fit">Fit</button>
+        <button id="btn-zoom-1x" class="active">1x</button>
+        <button id="btn-zoom-15x">1.5x</button>
+        <button id="btn-center-player">Center Player</button>
+        <span style="width: 1px; height: 16px; background: #334155; margin: 0 4px;"></span>
+        <label style="display: flex; align-items: center; gap: 4px; font-size: 0.72rem; cursor: pointer; color: #cbd5e1;">
+          <input type="checkbox" id="chk-sectors" checked style="accent-color: #38bdf8;"> Show 3x3 Sectors
+        </label>
+        <label style="display: flex; align-items: center; gap: 4px; font-size: 0.72rem; cursor: pointer; color: #cbd5e1;">
+          <input type="checkbox" id="chk-grid" style="accent-color: var(--accent);"> 64px Grid
+        </label>
+      </div>
+
+      <div id="toast">Substrate re-baked successfully</div>
+    </div>
+  </div>
+
+  <!-- Sidebar: Interactive Layer Inspector -->
+  <div id="sidebar">
+
+    <!-- Section 1: 5-Layer Stack Matrix -->
+    <div class="sidebar-section">
+      <div class="section-header">
+        <div class="section-title">Substrate Layers (Bottom-to-Top)</div>
+        <button id="btn-rebake-all" class="btn-solo" style="color: var(--accent); border-color: var(--accent); padding: 3px 8px;">Re-Bake</button>
+      </div>
+
+      <!-- Layer 5 -->
+      <div class="layer-card" id="card-l5">
+        <div class="layer-card-header">
+          <label class="layer-info" for="chk-l5">
+            <span class="layer-color-tag" style="background: var(--layer-l5);"></span>
+            <div>
+              <div class="layer-title-text">[L5] Entities & 2.5D Props</div>
+              <div class="layer-subtext">Dynamic Y-sorting, cottages, trees, dock, foot wash</div>
+            </div>
+          </label>
+          <div class="layer-actions">
+            <button class="btn-solo" data-layer="l5">Solo</button>
+            <input type="checkbox" class="checkbox-toggle" id="chk-l5" checked>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 4 -->
+      <div class="layer-card" id="card-l4">
+        <div class="layer-card-header">
+          <label class="layer-info" for="chk-l4">
+            <span class="layer-color-tag" style="background: var(--layer-l4);"></span>
+            <div>
+              <div class="layer-title-text">[L4] Flowing Water & Ocean Swells</div>
+              <div class="layer-subtext">Translucent coastal water, UV wave drift, river currents</div>
+            </div>
+          </label>
+          <div class="layer-actions">
+            <button class="btn-solo" data-layer="l4">Solo</button>
+            <input type="checkbox" class="checkbox-toggle" id="chk-l4" checked>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 3 -->
+      <div class="layer-card" id="card-l3">
+        <div class="layer-card-header">
+          <label class="layer-info" for="chk-l3">
+            <span class="layer-color-tag" style="background: var(--layer-l3);"></span>
+            <div>
+              <div class="layer-title-text">[L3] Biome / Grass Field</div>
+              <div class="layer-subtext">Vegetation carpet over soil (temporarily empty for substrate verification)</div>
+            </div>
+          </label>
+          <div class="layer-actions">
+            <button class="btn-solo" data-layer="l3">Solo</button>
+            <input type="checkbox" class="checkbox-toggle" id="chk-l3" checked>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 2 -->
+      <div class="layer-card" id="card-l2">
+        <div class="layer-card-header">
+          <label class="layer-info" for="chk-l2">
+            <span class="layer-color-tag" style="background: var(--layer-l2);"></span>
+            <div>
+              <div class="layer-title-text">[L2] Topsoil, Earth & Beach Sand</div>
+              <div class="layer-subtext">Continental mantle over bedrock: rich loam, forest soil & beach dunes (pure natural terrain)</div>
+            </div>
+          </label>
+          <div class="layer-actions">
+            <button class="btn-solo" data-layer="l2">Solo</button>
+            <input type="checkbox" class="checkbox-toggle" id="chk-l2" checked>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layer 1 -->
+      <div class="layer-card" id="card-l1">
+        <div class="layer-card-header">
+          <label class="layer-info" for="chk-l1">
+            <span class="layer-color-tag" style="background: var(--layer-l1);"></span>
+            <div>
+              <div class="layer-title-text">[L1] Bedrock / Abyss Base</div>
+              <div class="layer-subtext">Domain-warped Worley edge rifts (F2-F1), #05080c abyss cores & 1px basalt lips on 2x2 grid</div>
+            </div>
+          </label>
+          <div class="layer-actions">
+            <button class="btn-solo" data-layer="l1">Solo</button>
+            <input type="checkbox" class="checkbox-toggle" id="chk-l1" checked>
+          </div>
+        </div>
+      </div>
+
+      <!-- Master Presets -->
+      <div class="preset-grid">
+        <button class="btn-preset" id="preset-all">All 5 Layers On</button>
+        <button class="btn-preset" id="preset-substr-only">Substrate Only (No Props)</button>
+        <button class="btn-preset" id="preset-xray-water">X-Ray Water (Inspect Sand)</button>
+        <button class="btn-preset" id="preset-bedrock-only">Bedrock Floor Only</button>
+      </div>
+    </div>
+
+    <!-- Section 2: Water Simulation Sliders -->
+    <div class="sidebar-section">
+      <div class="section-title" style="margin-bottom: 10px;">Water Simulation (10 FPS Stepped, 1/6x Speed)</div>
+
+      <div class="control-group">
+        <div class="control-label-row">
+          <span class="control-label">Shallow Water Opacity</span>
+          <span class="control-val" id="val-shallow-alpha">0.45</span>
+        </div>
+        <input type="range" class="slider-input" id="rng-shallow-alpha" min="0.10" max="0.80" step="0.05" value="0.45">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label-row">
+          <span class="control-label">Deep Ocean Opacity</span>
+          <span class="control-val" id="val-deep-alpha">0.90</span>
+        </div>
+        <input type="range" class="slider-input" id="rng-deep-alpha" min="0.50" max="1.00" step="0.05" value="0.90">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label-row">
+          <span class="control-label">Water Flow UV Speed</span>
+          <span class="control-val" id="val-water-speed">0.20x</span>
+        </div>
+        <input type="range" class="slider-input" id="rng-water-speed" min="0.1" max="3.0" step="0.05" value="0.20">
+      </div>
+    </div>
+
+    <!-- Section 3: Procedural Noise Generation -->
+    <div class="sidebar-section">
+      <div class="section-title" style="margin-bottom: 10px;">Procedural Noise Tuning</div>
+
+      <div class="control-group">
+        <div class="control-label-row">
+          <span class="control-label">Landmass Noise Frequency</span>
+          <span class="control-val" id="val-noise-freq">0.0042</span>
+        </div>
+        <input type="range" class="slider-input" id="rng-noise-freq" min="0.0020" max="0.0090" step="0.0005" value="0.0042">
+      </div>
+
+      <div class="control-group">
+        <div class="control-label-row">
+          <span class="control-label">Island Radius Falloff</span>
+          <span class="control-val" id="val-island-rad">920 px</span>
+        </div>
+        <input type="range" class="slider-input" id="rng-island-rad" min="600" max="1300" step="50" value="920">
+      </div>
+
+      <button id="btn-random-seed" class="btn-preset" style="width: 100%; margin-top: 10px; padding: 7px;">🎲 Generate New Island Seed</button>
+    </div>
+
+    <!-- Section 4: Live Substrate Pixel Inspector -->
+    <div class="sidebar-section">
+      <div class="section-title" style="margin-bottom: 8px;">Substrate Coordinate Inspector</div>
+      <div class="inspector-box">
+        <div class="inspector-row">
+          <span class="insp-label">Cursor World Pos</span>
+          <span class="insp-val" id="insp-pos">X: 640, Y: 512</span>
+        </div>
+        <div class="inspector-row">
+          <span class="insp-label">Elevation / Depth</span>
+          <span class="insp-val" id="insp-elev">0.68 (Inland)</span>
+        </div>
+        <div class="inspector-row">
+          <span class="insp-label">[L1] Bedrock</span>
+          <span class="insp-val" style="color: var(--layer-l1);" id="insp-l1">Opaque Basalt</span>
+        </div>
+        <div class="inspector-row">
+          <span class="insp-label">[L2] Topsoil / Sand</span>
+          <span class="insp-val" style="color: var(--layer-l2);" id="insp-l2">Continental Loam</span>
+        </div>
+        <div class="inspector-row">
+          <span class="insp-label">[L3] Biome Grass</span>
+          <span class="insp-val" style="color: var(--layer-l3);" id="insp-l3">Cleared (Empty)</span>
+        </div>
+        <div class="inspector-row">
+          <span class="insp-label">[L4] Flowing Water</span>
+          <span class="insp-val" style="color: var(--layer-l4);" id="insp-l4">Dry (Land)</span>
+        </div>
+        <div class="inspector-row">
+          <span class="insp-label">[L5] Entity Occlusion</span>
+          <span class="insp-val" style="color: var(--layer-l5);" id="insp-l5">None</span>
+        </div>
+      </div>
+
+      <div style="margin-top: 10px; font-size: 0.72rem; color: #64748b; line-height: 1.4;">
+        Walk with <span class="key-badge">W</span> <span class="key-badge">A</span> <span class="key-badge">S</span> <span class="key-badge">D</span> into the shallow water to test <strong>submerged foot wash</strong> and notice sand extending seamlessly beneath the translucent water!
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+  /**
+   * =========================================================================
+   * SUBSTRATE TERRAIN STACK PROOF-OF-CONCEPT (5-Layer Architecture)
+   * Standalone Zero-Dependency Implementation
+   * =========================================================================
+   */
+
+  // --- Constants & World Configuration ---
+  const TILE_SIZE = 64;
+  const GRID_COLS = 30;
+  const GRID_ROWS = 24;
+  const WORLD_WIDTH = GRID_COLS * TILE_SIZE;   // 1920
+  const WORLD_HEIGHT = GRID_ROWS * TILE_SIZE; // 1536
+
+  // Substrate Elevation Thresholds
+  const ELEV_DEEP_WATER = 0.28;
+  const ELEV_SHALLOW_WATER = 0.44;
+  const ELEV_SAND_EXTENT = 0.52; // Sand extends beneath shallow water (down to 0.28) and onto dry beach
+  const ELEV_GRASS_MIN = 0.46;   // Grass begins feathering in over sand
+
+  // --- State Configuration ---
+  const config = {
+    // Layer Visibility
+    layers: {
+      l1: true, // Bedrock / Abyss Base
+      l2: true, // Topsoil, Earth & Beach Sand (Continental Mantle)
+      l3: true, // Biome / Grass Field (Vegetation Carpet - Cleared)
+      l4: true, // Flowing Water & Ocean Swells
+      l5: true  // Entities & 2.5D Props
+    },
+    // Water Simulation
+    water: {
+      shallowAlpha: 0.45,
+      deepAlpha: 0.90,
+      waterSpeed: 0.20
+    },
+    // Noise Generation
+    noise: {
+      freq: 0.0042,
+      islandRadius: 920,
+      seed: 42
+    },
+    // Debug & Camera
+    debug: {
+      showGrid: false,
+      showSectors: true
+    },
+    camera: {
+      zoom: 1.0,
+      panX: 0,
+      panY: 0
+    }
+  };
+
+  // --- 3x3 Sector Grid Constants (Continental SE Headland) ---
+  const SECTOR_COLS = 3;
+  const SECTOR_ROWS = 3;
+  const SECTOR_WIDTH = WORLD_WIDTH / SECTOR_COLS;   // 640px
+  const SECTOR_HEIGHT = WORLD_HEIGHT / SECTOR_ROWS; // 512px
+
+  const SECTOR_METADATA = [
+    { id: 1, col: 0, row: 0, name: 'Continental Forest', type: 'Land', icon: '🌲', badge: '#10b981', desc: 'Offscreen Continental Interior (North & West)' },
+    { id: 2, col: 1, row: 0, name: 'North Coastal Bluff', type: 'Land', icon: '🌿', badge: '#10b981', desc: 'Inland Forest & Dunes (North extension)' },
+    { id: 3, col: 2, row: 0, name: 'Northeast Sea', type: 'Water', icon: '🌊', badge: '#38bdf8', desc: 'Open Coastal Waters & Sandbars' },
+    { id: 4, col: 0, row: 1, name: 'West Headland', type: 'Land', icon: '⛰️', badge: '#10b981', desc: 'Western Forest Plateau (West extension)' },
+    { id: 5, col: 1, row: 1, name: 'Beach Camp & Cove', type: 'Land', icon: '🏕️', badge: '#f59e0b', desc: 'Promontory Camp Hub, Pier & Dunes' },
+    { id: 6, col: 2, row: 1, name: 'East Coastal Shallows', type: 'Water', icon: '💦', badge: '#38bdf8', desc: 'Pier Terminus, Tidal Reefs & Shallows' },
+    { id: 7, col: 0, row: 2, name: 'Southwest Basin', type: 'Water', icon: '🌊', badge: '#38bdf8', desc: 'South-facing Oceanic Channel' },
+    { id: 8, col: 1, row: 2, name: 'South Open Ocean', type: 'Water', icon: '🌊', badge: '#38bdf8', desc: 'Southern Swell & Ocean Depths' },
+    { id: 9, col: 2, row: 2, name: 'Abyssal Deep Trench', type: 'Water', icon: '🌌', badge: '#6366f1', desc: 'Deep Pelagic Abyss & Hydrothermal Rifts' }
+  ];
+
+  function getSectorAt(wx, wy) {
+    const col = Math.max(0, Math.min(2, Math.floor(wx / SECTOR_WIDTH)));
+    const row = Math.max(0, Math.min(2, Math.floor(wy / SECTOR_HEIGHT)));
+    return SECTOR_METADATA[row * 3 + col];
+  }
+
+  // Solo tracking state
+  let currentSoloLayer = null;
+
+  // --- 2D Simplex Noise Implementation (Self-Contained) ---
+  class SimplexNoise {
+    constructor(seed = 42) {
+      this.p = new Uint8Array(256);
+      this.perm = new Uint8Array(512);
+      this.permMod12 = new Uint8Array(512);
+      this.init(seed);
+    }
+
+    init(seed) {
+      // Linear congruential generator for seeded random permutation
+      let s = seed % 2147483647;
+      if (s <= 0) s += 2147483646;
+      function next() {
+        return (s = (s * 16807) % 2147483647) / 2147483647;
+      }
+
+      for (let i = 0; i < 256; i++) {
+        this.p[i] = i;
+      }
+      for (let i = 255; i > 0; i--) {
+        const j = Math.floor(next() * (i + 1));
+        const temp = this.p[i];
+        this.p[i] = this.p[j];
+        this.p[j] = temp;
+      }
+      for (let i = 0; i < 512; i++) {
+        this.perm[i] = this.p[i & 255];
+        this.permMod12[i] = this.perm[i] % 12;
+      }
+    }
+
+    noise2D(xin, yin) {
+      const grad3 = [
+        [1, 1], [-1, 1], [1, -1], [-1, -1],
+        [1, 0], [-1, 0], [1, 0], [-1, 0],
+        [0, 1], [0, -1], [0, 1], [0, -1]
+      ];
+
+      const F2 = 0.5 * (Math.sqrt(3.0) - 1.0);
+      const G2 = (3.0 - Math.sqrt(3.0)) / 6.0;
+
+      let n0 = 0, n1 = 0, n2 = 0;
+      const s = (xin + yin) * F2;
+      const i = Math.floor(xin + s);
+      const j = Math.floor(yin + s);
+      const t = (i + j) * G2;
+      const X0 = i - t;
+      const Y0 = j - t;
+      const x0 = xin - X0;
+      const y0 = yin - Y0;
+
+      let i1, j1;
+      if (x0 > y0) { i1 = 1; j1 = 0; }
+      else { i1 = 0; j1 = 1; }
+
+      const x1 = x0 - i1 + G2;
+      const y1 = y0 - j1 + G2;
+      const x2 = x0 - 1.0 + 2.0 * G2;
+      const y2 = y0 - 1.0 + 2.0 * G2;
+
+      const ii = i & 255;
+      const jj = j & 255;
+      const gi0 = this.permMod12[ii + this.perm[jj]];
+      const gi1 = this.permMod12[ii + i1 + this.perm[jj + j1]];
+      const gi2 = this.permMod12[ii + 1 + this.perm[jj + 1]];
+
+      let t0 = 0.5 - x0 * x0 - y0 * y0;
+      if (t0 >= 0) {
+        t0 *= t0;
+        n0 = t0 * t0 * (grad3[gi0][0] * x0 + grad3[gi0][1] * y0);
+      }
+
+      let t1 = 0.5 - x1 * x1 - y1 * y1;
+      if (t1 >= 0) {
+        t1 *= t1;
+        n1 = t1 * t1 * (grad3[gi1][0] * x1 + grad3[gi1][1] * y1);
+      }
+
+      let t2 = 0.5 - x2 * x2 - y2 * y2;
+      if (t2 >= 0) {
+        t2 *= t2;
+        n2 = t2 * t2 * (grad3[gi2][0] * x2 + grad3[gi2][1] * y2);
+      }
+
+      // Return scaled result in range [-1, 1]
+      return 70.0 * (n0 + n1 + n2);
+    }
+
+    fbm(x, y, octaves = 4, persistence = 0.5, lacunarity = 2.0) {
+      let total = 0;
+      let frequency = 1;
+      let amplitude = 1;
+      let maxValue = 0;
+      for (let i = 0; i < octaves; i++) {
+        total += this.noise2D(x * frequency, y * frequency) * amplitude;
+        maxValue += amplitude;
+        amplitude *= persistence;
+        frequency *= lacunarity;
+      }
+      return total / maxValue; // Normalized [-1, 1]
+    }
+  }
+
+  let simplex = new SimplexNoise(config.noise.seed);
+
+  // =========================================================================
+  // CONTINENTAL RIVER SYSTEM (Meandering Stream: NW Forest to SE Ocean)
+  // =========================================================================
+  // Originates in top-left (Sector 1 Continental Forest), meanders across the headland,
+  // passes under the North Highway wooden bridge, curves past the camp promontory,
+  // and discharges into Sector 6 East Coastal Shallows.
+  const RIVER_WAYPOINTS = [
+    { x: -30,  y: 120 }, // NW Offscreen origin in Sector 1
+    { x: 160,  y: 160 }, // Sector 1 Continental Forest stream
+    { x: 340,  y: 220 }, // Meandering forest reach
+    { x: 540,  y: 310 }, // Sector 1 / 2 border
+    { x: 740,  y: 390 }, // Entering Sector 2 / 5
+    { x: 920,  y: 450 }, // Bridge crossing at North Highway
+    { x: 1080, y: 530 }, // Curving north of Beach Camp
+    { x: 1240, y: 640 }, // Approaching East coast
+    { x: 1380, y: 760 }, // River estuary entering Sector 6 shallows
+    { x: 1560, y: 880 }  // Dissipating into ocean shelf
+  ];
+
+  const riverSegments = [];
+  const RIVER_BUCKET_SIZE = 64;
+  const RIVER_BUCKET_COLS = Math.ceil(WORLD_WIDTH / RIVER_BUCKET_SIZE) + 2;
+  const RIVER_BUCKET_ROWS = Math.ceil(WORLD_HEIGHT / RIVER_BUCKET_SIZE) + 2;
+  const riverBuckets = new Array(RIVER_BUCKET_COLS * RIVER_BUCKET_ROWS);
+
+  function initRiverSystem() {
+    riverSegments.length = 0;
+    for (let i = 0; i < riverBuckets.length; i++) {
+      riverBuckets[i] = [];
+    }
+
+    const n = RIVER_WAYPOINTS.length;
+    for (let i = 0; i < n - 1; i++) {
+      const p0 = RIVER_WAYPOINTS[Math.max(0, i - 1)];
+      const p1 = RIVER_WAYPOINTS[i];
+      const p2 = RIVER_WAYPOINTS[i + 1];
+      const p3 = RIVER_WAYPOINTS[Math.min(n - 1, i + 2)];
+
+      const steps = 16;
+      for (let s = 0; s < steps; s++) {
+        const t = s / steps;
+        const tNext = (s + 1) / steps;
+        const t2 = t * t, t3 = t2 * t;
+        const nt2 = tNext * tNext, nt3 = nt2 * tNext;
+
+        // Catmull-Rom interpolation with procedural wander
+        const wander1 = simplex.noise2D((i + t) * 1.5, 33.1) * 6;
+        const wander2 = simplex.noise2D((i + tNext) * 1.5, 33.1) * 6;
+
+        const x1 = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3) + wander1;
+        const y1 = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3) + wander1;
+        const x2 = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * tNext + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * nt2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * nt3) + wander2;
+        const y2 = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * tNext + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * nt2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * nt3) + wander2;
+
+        const globalT = (i + t) / (n - 1);
+        // River widens from 14px half-width in forest to 24px at ocean mouth
+        const halfWidth = 14 + globalT * 10;
+        const dx = x2 - x1, dy = y2 - y1;
+        const len = Math.hypot(dx, dy) || 1;
+
+        const seg = {
+          x1, y1, x2, y2,
+          dx: dx / len, dy: dy / len,
+          len,
+          halfWidth,
+          globalT,
+          minX: Math.min(x1, x2) - halfWidth * 1.8,
+          maxX: Math.max(x1, x2) + halfWidth * 1.8,
+          minY: Math.min(y1, y2) - halfWidth * 1.8,
+          maxY: Math.max(y1, y2) + halfWidth * 1.8
+        };
+        riverSegments.push(seg);
+
+        const c0 = Math.max(0, Math.floor(seg.minX / RIVER_BUCKET_SIZE));
+        const c1 = Math.min(RIVER_BUCKET_COLS - 1, Math.floor(seg.maxX / RIVER_BUCKET_SIZE));
+        const r0 = Math.max(0, Math.floor(seg.minY / RIVER_BUCKET_SIZE));
+        const r1 = Math.min(RIVER_BUCKET_ROWS - 1, Math.floor(seg.maxY / RIVER_BUCKET_SIZE));
+
+        for (let r = r0; r <= r1; r++) {
+          for (let c = c0; c <= c1; c++) {
+            riverBuckets[r * RIVER_BUCKET_COLS + c].push(seg);
+          }
+        }
+      }
+    }
+  }
+
+  initRiverSystem();
+
+  /**
+   * Fast spatial lookup for continuous river channel geometry, water mask, and flow vector.
+   */
+  function getRiverInfo(wx, wy) {
+    const col = Math.floor(wx / RIVER_BUCKET_SIZE);
+    const row = Math.floor(wy / RIVER_BUCKET_SIZE);
+    if (col < 0 || col >= RIVER_BUCKET_COLS || row < 0 || row >= RIVER_BUCKET_ROWS) return null;
+    const list = riverBuckets[row * RIVER_BUCKET_COLS + col];
+    if (!list || list.length === 0) return null;
+
+    let bestDist = 1e9;
+    let bestSeg = null;
+
+    for (let i = 0; i < list.length; i++) {
+      const seg = list[i];
+      const vx = wx - seg.x1;
+      const vy = wy - seg.y1;
+      const proj = vx * seg.dx + vy * seg.dy;
+      const clampedProj = Math.max(0, Math.min(seg.len, proj));
+      const closestX = seg.x1 + seg.dx * clampedProj;
+      const closestY = seg.y1 + seg.dy * clampedProj;
+      const dist = Math.hypot(wx - closestX, wy - closestY);
+
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestSeg = seg;
+      }
+    }
+
+    if (bestSeg && bestDist < bestSeg.halfWidth * 1.6) {
+      const normDist = bestDist / bestSeg.halfWidth;
+      return {
+        dist: bestDist,
+        normDist,
+        inWater: normDist <= 1.0,
+        bank: normDist > 1.0 && normDist < 1.6,
+        flowDx: bestSeg.dx,
+        flowDy: bestSeg.dy,
+        halfWidth: bestSeg.halfWidth,
+        globalT: bestSeg.globalT
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Evaluates macro continental coastline elevation at world pixel coordinate (wx, wy).
+   * Defines the true solid island/continent landmass vs. ocean boundary (WITHOUT the freshwater river carving).
+   * Used for ocean shoreline contours and ocean swell clipping so ocean waves NEVER enter the river.
+   */
+  function getMacroCoastElevation(wx, wy) {
+    // Multi-octave domain warping to break up geometric lines into organic coastlines
+    const qx = simplex.fbm(wx * 0.0022, wy * 0.0022, 2, 0.5, 2.0) * 110;
+    const qy = simplex.fbm(wx * 0.0022 + 5.2, wy * 0.0022 + 1.3, 2, 0.5, 2.0) * 110;
+    const rx = simplex.noise2D((wx + qx) * 0.006, (wy + qy) * 0.006) * 38;
+    const ry = simplex.noise2D((wx + qx) * 0.006 + 3.1, (wy + qy) * 0.006 + 7.4) * 38;
+    const warpedX = wx + qx + rx;
+    const warpedY = wy + qy + ry;
+
+    // Super-ellipse corner metric centered at NW (0, 0), encompassing Sectors 1, 2, 4, 5
+    const nx = Math.max(0, warpedX / 1380);
+    const ny = Math.max(0, warpedY / 1100);
+    const dist = Math.pow(Math.pow(nx, 3.8) + Math.pow(ny, 3.8), 1 / 3.8);
+
+    // Inland continent is high plateaus (0.86), sloping to coastal camp (0.54) and shoreline (0.44)
+    let cornerGradient = 0.86 - Math.pow(dist, 1.75) * 0.46;
+
+    // Multi-octave FBM organic topography
+    const nxNoise = warpedX * config.noise.freq;
+    const nyNoise = warpedY * config.noise.freq;
+    const noiseVal = simplex.fbm(nxNoise, nyNoise, 4, 0.52, 2.05) * 0.16;
+
+    // High-frequency micro details
+    const micro = (simplex.noise2D(wx * 0.015, wy * 0.015) + 1.0) * 0.025;
+
+    let elev = cornerGradient + noiseVal + micro;
+
+    // Ocean deepening on open sea borders (East and South)
+    if (wx > 1500) {
+      const eastDrop = (wx - 1500) / 420;
+      elev -= eastDrop * 0.12;
+    }
+    if (wy > 1200) {
+      const southDrop = (wy - 1200) / 336;
+      elev -= southDrop * 0.12;
+    }
+    if (wx > 1400 && wy > 1100) {
+      // Abyssal deep trench in the far south-east ocean
+      const seDrop = Math.hypot((wx - 1400) / 520, (wy - 1100) / 436);
+      elev -= seDrop * 0.14;
+    }
+
+    return Math.max(0.0, Math.min(1.0, elev));
+  }
+
+  /**
+   * Evaluates procedural elevation at world pixel coordinate (wx, wy) for Beach Camp.
+   * Includes both macro continental landmass and carved freshwater river channel.
+   */
+  function getElevation(wx, wy) {
+    let elev = getMacroCoastElevation(wx, wy);
+
+    // Continental River Channel Carving (NW to SE meander)
+    // Physically carves a U-shaped stream channel with sloping earthen banks
+    const rInfo = getRiverInfo(wx, wy);
+    if (rInfo) {
+      if (rInfo.inWater) {
+        // Carve riverbed down below shallow water level (0.44) to 0.36 - 0.40
+        const bedTarget = 0.36 + 0.04 * (rInfo.normDist * rInfo.normDist);
+        if (elev > bedTarget) {
+          elev = bedTarget;
+        }
+      } else if (rInfo.bank) {
+        // Sloping earthen riverbanks transitioning smoothly into inland plateau
+        const bankFactor = (rInfo.normDist - 1.0) / 0.6; // [0, 1]
+        const smoothBank = bankFactor * bankFactor * (3 - 2 * bankFactor); // cubic smoothstep
+        const bedEdge = 0.40;
+        if (elev > bedEdge) {
+          elev = bedEdge + (elev - bedEdge) * smoothBank;
+        }
+      }
+    }
+
+    return Math.max(0.0, Math.min(1.0, elev));
+  }
+
+  /**
+   * Evaluates winding dirt trail network mask and W-profile wear for Beach Camp.
+   * Features:
+   * 1. Continental West Highway: Entering from Sector 4 (W) into Camp Hub (Sector 5)
+   * 2. Continental North Highway: Entering from Sector 2 (N) into Camp Hub (Sector 5)
+   * 3. Pier Causeway: Connecting Camp Hub (Sector 5) out to the Pier & Dock in Sector 6
+   * 4. Beach Campfire Spur: Leading south from Camp Hub to the sandy campfire
+   */
+  function getTrailInfo(wx, wy) {
+    let bestIntensity = 0;
+    let bestRut = 0;
+    let bestCenterRidge = 0;
+    let bestShoulder = 0;
+
+    function evaluatePathPoint(centerCoord, queryCoord, halfWidth) {
+      const dist = Math.abs(queryCoord - centerCoord);
+      if (dist < halfWidth) {
+        const u = (queryCoord - centerCoord) / halfWidth; // [-1, 1]
+        const absU = Math.abs(u);
+        const overall = 1.0 - absU;
+        const rutVal = Math.max(0, 1.0 - (Math.abs(absU - 0.48) / 0.26));
+        const centerVal = Math.max(0, 1.0 - (absU / 0.22));
+        const shoulderVal = absU > 0.70 ? (absU - 0.70) / 0.30 : 0;
+
+        if (overall > bestIntensity) {
+          bestIntensity = overall;
+          bestRut = rutVal;
+          bestCenterRidge = centerVal;
+          bestShoulder = shoulderVal;
+        }
+      }
+    }
+
+    // 1. Continental West Highway (from wx: 0 to 980, entering from Sector 4 into Camp Sector 5)
+    if (wx >= 0 && wx <= 990 && wy >= 380 && wy <= 820) {
+      const t = Math.max(0, Math.min(1, wx / 960));
+      const baseCenterY = 480 + t * 220 + Math.sin(t * Math.PI * 1.6) * 36;
+      const wander = simplex.noise2D(wx * 0.007, 31.4) * 14 + simplex.noise2D(wx * 0.02, 11.2) * 5;
+      const pathCenterY = baseCenterY + wander;
+      const apronBonus = (t > 0.85 ? (t - 0.85) * 70 : 0);
+      const halfWidth = 18 + apronBonus + simplex.noise2D(wx * 0.008, 92.5) * 6;
+      evaluatePathPoint(pathCenterY, wy, halfWidth);
+    }
+
+    // 2. Continental North Highway (from wy: 0 to 720, entering from Sector 2 into Camp Sector 5)
+    if (wy >= 0 && wy <= 740 && wx >= 720 && wx <= 1040) {
+      const t = Math.max(0, Math.min(1, wy / 700));
+      const baseCenterX = 840 + t * 120 + Math.sin(t * Math.PI * 1.5) * 28;
+      const wander = simplex.noise2D(wy * 0.007, 71.8) * 12 + simplex.noise2D(wy * 0.02, 43.1) * 4;
+      const pathCenterX = baseCenterX + wander;
+      const apronBonus = (t > 0.85 ? (t - 0.85) * 60 : 0);
+      const halfWidth = 16 + apronBonus + simplex.noise2D(wy * 0.008, 14.2) * 5;
+      evaluatePathPoint(pathCenterX, wx, halfWidth);
+    }
+
+    // 3. Pier Causeway (from Camp Hub wx: 940 to 1240, heading east-southeast to Dock in Sector 6)
+    if (wx >= 940 && wx <= 1260 && wy >= 660 && wy <= 840) {
+      const t = Math.max(0, Math.min(1, (wx - 960) / 260));
+      const baseCenterY = 700 + t * 80 + Math.sin(t * Math.PI) * 12;
+      const wander = simplex.noise2D(wx * 0.012, 19.4) * 6;
+      const pathCenterY = baseCenterY + wander;
+      const halfWidth = 15 + (t > 0.85 ? 12 : 0);
+      evaluatePathPoint(pathCenterY, wy, halfWidth);
+    }
+
+    // 4. Beach Campfire Spur (from Camp Hub wy: 700 to 860, heading south towards the campfire)
+    if (wy >= 700 && wy <= 870 && wx >= 980 && wx <= 1100) {
+      const t = Math.max(0, Math.min(1, (wy - 700) / 150));
+      const baseCenterX = 980 + t * 60 + Math.sin(t * Math.PI) * 8;
+      const wander = simplex.noise2D(wy * 0.015, 88.2) * 4;
+      const pathCenterX = baseCenterX + wander;
+      const halfWidth = 13 + (t > 0.80 ? 10 : 0);
+      evaluatePathPoint(pathCenterX, wx, halfWidth);
+    }
+
+    return {
+      intensity: bestIntensity,
+      rut: bestRut,
+      centerRidge: bestCenterRidge,
+      shoulder: bestShoulder
+    };
+  }
+
+  function getTrailIntensity(wx, wy) {
+    return getTrailInfo(wx, wy).intensity;
+  }
+
+  // --- Offscreen Cached Canvas Layers (Phase 1: Static Bake) ---
+  const canvasL1 = document.createElement('canvas'); // Bedrock Floor
+  const canvasL2 = document.createElement('canvas'); // Topsoil, Earth & Beach Sand (Continental Mantle)
+  const canvasL3 = document.createElement('canvas'); // Biome Grass Field (Vegetation Carpet)
+  const canvasL4_bathymetry = document.createElement('canvas'); // Pre-baked Continuous Water Bathymetry
+  const canvasL4_water = document.createElement('canvas'); // 10 FPS Stepped Dynamic Water & Wave Buffer
+
+  canvasL1.width = WORLD_WIDTH; canvasL1.height = WORLD_HEIGHT;
+  canvasL2.width = WORLD_WIDTH; canvasL2.height = WORLD_HEIGHT;
+  canvasL3.width = WORLD_WIDTH; canvasL3.height = WORLD_HEIGHT;
+  canvasL4_bathymetry.width = WORLD_WIDTH; canvasL4_bathymetry.height = WORLD_HEIGHT;
+  canvasL4_water.width = WORLD_WIDTH; canvasL4_water.height = WORLD_HEIGHT;
+
+  const ctxL1 = canvasL1.getContext('2d');
+  const ctxL2 = canvasL2.getContext('2d');
+  const ctxL3 = canvasL3.getContext('2d');
+  const ctxL4_bathymetry = canvasL4_bathymetry.getContext('2d');
+  const ctxL4_water = canvasL4_water.getContext('2d');
+
+  let lastWaterEvalNow = 0;
+  const WATER_UPDATE_INTERVAL_MS = 100; // 10 FPS (100ms evaluation interval)
+
+  // =========================================================================
+  // LAYER 1 MEMORY MODEL & BEDROCK ARCHITECTURE (The Retro Voxel Soul)
+  // =========================================================================
+  // Flat typed memory buffer storing discrete geological strata for the entire world.
+  // Backed by native 1:1 pixel fidelity for crisp, high-resolution classic PC art.
+  const BEDROCK_BLOCK = 1; // Native 1:1 pixel fidelity
+  const BEDROCK_COLS = WORLD_WIDTH;   // 1920
+  const BEDROCK_ROWS = WORLD_HEIGHT;  // 1536
+
+  // Voxel classifications for discrete world memory
+  const VOXEL_ABYSS_TRENCH = 0;       // Oceanic deep trench & hydrothermal rifts (< 0.16)
+  const VOXEL_OCEANIC_BASALT = 1;     // Abyssal basalt sea floor (0.16 - 0.32)
+  const VOXEL_CONTINENTAL_SLATE = 2;  // Continental shelf & subsea rock slab (0.32 - 0.48)
+  const VOXEL_SUBTERRENE_GRANITE = 3; // Island bedrock foundation (>= 0.48)
+
+  // Geologic fracture feature flags stored in upper nibble of bedrockVoxels
+  const VOXEL_FLAG_FISSURE = 4; // Inside tectonic fracture / chasm
+  const VOXEL_FLAG_CORE = 8;    // Deep near-black abyss center (#05080c)
+  const VOXEL_FLAG_LIP = 16;    // 1px lighter basalt lip on chasm boundary
+
+  const bedrockVoxels = new Uint8Array(BEDROCK_COLS * BEDROCK_ROWS);
+
+  /**
+   * Fast bitwise integer PRNG hash for discrete late-90s mineral grain tooth.
+   */
+  function hash2D(x, y, seed) {
+    let h = seed ^ (x * 374761393) ^ (y * 668265263);
+    h = (h ^ (h >> 13)) * 1274126177;
+    return (h ^ (h >> 16)) & 0xFF;
+  }
+
+  /**
+   * Packs 8-bit RGBA channels into a 32-bit little-endian integer (0xAABBGGRR).
+   */
+  function packABGR(r, g, b, a = 255) {
+    const cr = r < 0 ? 0 : (r > 255 ? 255 : r);
+    const cg = g < 0 ? 0 : (g > 255 ? 255 : g);
+    const cb = b < 0 ? 0 : (b > 255 ? 255 : b);
+    return ((a & 0xFF) << 24) | ((cb & 0xFF) << 16) | ((cg & 0xFF) << 8) | (cr & 0xFF);
+  }
+
+  // Shared pre-sampled elevation grid (BLOCK = 4)
+  const ELEV_GRID_BLOCK = 4;
+  const ELEV_GRID_COLS = WORLD_WIDTH / ELEV_GRID_BLOCK;
+  const ELEV_GRID_ROWS = WORLD_HEIGHT / ELEV_GRID_BLOCK;
+  const elevationGrid = new Float32Array(ELEV_GRID_COLS * ELEV_GRID_ROWS);
+
+  /**
+   * Pre-evaluates continuous world elevation into a fast lookup grid.
+   */
+  function computeElevationGrid() {
+    for (let r = 0; r < ELEV_GRID_ROWS; r++) {
+      const wy = r * ELEV_GRID_BLOCK;
+      const rOffset = r * ELEV_GRID_COLS;
+      for (let c = 0; c < ELEV_GRID_COLS; c++) {
+        elevationGrid[rOffset + c] = getElevation(c * ELEV_GRID_BLOCK, wy);
+      }
+    }
+  }
+
+  /**
+   * Bilinearly samples the elevation grid at world coordinates (wx, wy).
+   */
+  function sampleElevation(wx, wy) {
+    const gx = wx / ELEV_GRID_BLOCK;
+    const gy = wy / ELEV_GRID_BLOCK;
+    const x0 = Math.floor(gx);
+    const y0 = Math.floor(gy);
+    const x1 = Math.min(ELEV_GRID_COLS - 1, x0 + 1);
+    const y1 = Math.min(ELEV_GRID_ROWS - 1, y0 + 1);
+    const fx = gx - x0;
+    const fy = gy - y0;
+
+    const idx00 = y0 * ELEV_GRID_COLS + x0;
+    const idx10 = y0 * ELEV_GRID_COLS + x1;
+    const idx01 = y1 * ELEV_GRID_COLS + x0;
+    const idx11 = y1 * ELEV_GRID_COLS + x1;
+
+    const top = elevationGrid[idx00] * (1 - fx) + elevationGrid[idx10] * fx;
+    const bot = elevationGrid[idx01] * (1 - fx) + elevationGrid[idx11] * fx;
+    return top * (1 - fy) + bot * fy;
+  }
+
+  /**
+   * Evaluates Tectonic Fault Lines & Hydrothermal Abyssal Chasms.
+   * Replaces uniform contour loops with domain-warped cellular Worley edge formula (F2 - F1)
+   * combined with ridged multifractal noise for sharp, angular geological fault lines.
+   * Fault lines dynamically pinch into thin hairline fractures and open into wide, jagged chasms.
+   */
+  function sampleTectonicRift(wx, wy, seed) {
+    // 1. Domain Warping: 2-octave coordinate distortion bends Voronoi boundaries into jagged fault lines
+    const warpX = simplex.noise2D(wx * 0.0032, wy * 0.0032) * 52.0 +
+                  simplex.noise2D(wx * 0.012 + 4.1, wy * 0.012 + 1.7) * 14.0;
+    const warpY = simplex.noise2D(wx * 0.0032 + 7.3, wy * 0.0032 + 3.9) * 52.0 +
+                  simplex.noise2D(wx * 0.012 + 8.2, wy * 0.012 + 6.3) * 14.0;
+    const px = wx + warpX;
+    const py = wy + warpY;
+
+    // 2. Cellular / Worley Edge formula (F2 - F1)
+    const CELL_SIZE = 175;
+    const cx = Math.floor(px / CELL_SIZE);
+    const cy = Math.floor(py / CELL_SIZE);
+
+    let d1 = 1e9, d2 = 1e9;
+    for (let dy = -1; dy <= 1; dy++) {
+      const ncy = cy + dy;
+      for (let dx = -1; dx <= 1; dx++) {
+        const ncx = cx + dx;
+        const h = ((ncx * 374761393) ^ (ncy * 668265263) ^ (seed * 1274126177)) >>> 0;
+        const ptX = ncx * CELL_SIZE + (((h & 255) / 255.0) * 0.8 + 0.1) * CELL_SIZE;
+        const ptY = ncy * CELL_SIZE + ((((h >>> 8) & 255) / 255.0) * 0.8 + 0.1) * CELL_SIZE;
+        const distSq = (px - ptX) * (px - ptX) + (py - ptY) * (py - ptY);
+        if (distSq < d1) {
+          d2 = d1;
+          d1 = distSq;
+        } else if (distSq < d2) {
+          d2 = distSq;
+        }
+      }
+    }
+
+    const f1 = Math.sqrt(d1);
+    const f2 = Math.sqrt(d2);
+    const cellEdge = f2 - f1; // Distance in texel units to Voronoi ridge
+
+    // 3. Ridged Multifractal Noise for angular fracture jaggedness
+    const r1 = 1.0 - Math.abs(simplex.noise2D(wx * 0.0075, wy * 0.0075));
+    const r2 = 1.0 - Math.abs(simplex.noise2D(wx * 0.022, wy * 0.022));
+    const ridged = r1 * 0.65 + r2 * 0.35; // [0, 1]
+
+    // Perturb the fault edge distance with the ridged noise for sharp angular facets
+    const crackDist = cellEdge - (1.0 - ridged) * 6.5;
+
+    // 4. Variable Trench Width & Depth:
+    // Regional tectonic strain field modulates dilation vs compression
+    const strain = (simplex.noise2D(wx * 0.0019 + 15.2, wy * 0.0019 + 7.8) + 1.0) * 0.5;
+    const pinch = (simplex.noise2D(wx * 0.018 + 3.1, wy * 0.018 + 9.4) + 1.0) * 0.5;
+
+    let halfWidth = 0;
+    if (strain > 0.32) {
+      const tStrain = (strain - 0.32) / 0.68;
+      // High-frequency pinch modulation: pinches to hairline fractures (1.2px) and expands to wide chasms (up to ~14px)
+      const pinchMod = Math.max(0.12, pinch * 0.82 + 0.18);
+      halfWidth = (1.5 + tStrain * tStrain * 13.0) * pinchMod;
+    }
+
+    // 5. Fault classification:
+    // - isFissure: inside the crack/chasm
+    // - isCore: deep near-black abyss center (#05080c)
+    // - isLip: 1px lighter basalt lip on the edges to simulate depth
+    const isFissure = halfWidth > 0.8 && crackDist < halfWidth;
+    const isCore = isFissure && (crackDist < halfWidth * 0.45);
+    const lipWidth = 2.0; // 1-2 screen pixels (1 texel on 2x2 grid)
+    const isLip = !isFissure && halfWidth > 1.2 && crackDist >= halfWidth && crackDist < (halfWidth + lipWidth);
+
+    return {
+      isFissure,
+      isCore,
+      isLip,
+      crackDist,
+      halfWidth
+    };
+  }
+
+  /**
+   * [LAYER 1]: BEDROCK / ABYSS BASE
+   * 
+   * Homage to late-90s PC classics (Ultima Online, Diablo II, Tibia),
+   * supercharged with 2026 direct 32-bit pixel pipelines and typed memory buffers:
+   * - Flat Uint8Array voxel classification
+   * - Direct Uint32Array 32-bit (0xAABBGGRR) native pixel blit into ImageData
+   * - Tectonic fault lines & hydrothermal abyssal rifts (cellular Worley F2-F1 + ridged multifractal)
+   * - Variable chasm width (hairline fractures to gaping #05080c abyss cores with 1px lighter basalt lips)
+   * - 2.5D oblique directional relief (NW sun angle catchlights & SE crevice shadows)
+   * - Discrete 2x2 texel mineral grain tooth (pyrite flecks, coarse basalt silt, micro-pits)
+   */
+  function bakeBedrockLayer() {
+    ctxL1.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    const imgDataL1 = ctxL1.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
+    const buf32 = new Uint32Array(imgDataL1.data.buffer);
+
+    const seed = config.noise.seed;
+
+    for (let by = 0; by < BEDROCK_ROWS; by++) {
+      const wy = by;
+      const yW0 = wy * WORLD_WIDTH;
+
+      for (let bx = 0; bx < BEDROCK_COLS; bx++) {
+        const wx = bx;
+        const elev = sampleElevation(wx, wy);
+
+        // 1. Classify discrete voxel geologic stratum
+        let vType;
+        if (elev < 0.16) {
+          vType = VOXEL_ABYSS_TRENCH;
+        } else if (elev < 0.32) {
+          vType = VOXEL_OCEANIC_BASALT;
+        } else if (elev < 0.48) {
+          vType = VOXEL_CONTINENTAL_SLATE;
+        } else {
+          vType = VOXEL_SUBTERRENE_GRANITE;
+        }
+
+        // 2. Tectonic fault fissures / hydrothermal rifts via Worley F2-F1 + ridged noise
+        const rift = sampleTectonicRift(wx, wy, seed);
+        let flags = 0;
+        if (rift.isFissure) flags |= VOXEL_FLAG_FISSURE;
+        if (rift.isCore) flags |= VOXEL_FLAG_CORE;
+        if (rift.isLip) flags |= VOXEL_FLAG_LIP;
+        bedrockVoxels[yW0 + wx] = vType | flags;
+
+        // 3. 2.5D Oblique Directional Relief (Classic 90s NW sun angle)
+        const slabNW = simplex.noise2D((wx - 3) * 0.011, (wy - 3) * 0.011);
+        const slabSE = simplex.noise2D((wx + 3) * 0.011, (wy + 3) * 0.011);
+        const relief = Math.round((slabNW - slabSE) * 9.0); // [-9, +9]
+
+        // 4. Discrete mineral tooth (bitwise PRNG hash)
+        const grain = hash2D(bx, by, seed + 107);
+
+        let r, g, b;
+
+        if (vType === VOXEL_ABYSS_TRENCH) {
+          // Deepest Abyssal Trench: cold obsidian & dark ocean floor
+          r = 8 + relief;
+          g = 11 + relief;
+          b = 20 + relief;
+        } else if (vType === VOXEL_OCEANIC_BASALT) {
+          // Deep Oceanic Basalt: weathered dark seabed slabs
+          r = 15 + relief;
+          g = 21 + relief;
+          b = 33 + relief;
+        } else if (vType === VOXEL_CONTINENTAL_SLATE) {
+          // Continental Shelf: textured slate seabed beneath coastal shallows
+          r = 23 + relief;
+          g = 31 + relief;
+          b = 46 + relief;
+        } else {
+          // Sub-terrene Granite: dense ancient crust beneath the island
+          r = 28 + relief;
+          g = 35 + relief;
+          b = 49 + relief;
+        }
+
+        // Apply discrete mineral grain tooth
+        if (grain > 238) {
+          // Pyrite / Quartz crystal inclusion
+          r += 16; g += 18; b += 22;
+        } else if (grain > 180) {
+          r += 5; g += 6; b += 8;
+        } else if (grain < 40) {
+          r -= 5; g -= 6; b -= 8;
+        }
+
+        // 5. Render Geological Fractures & Chasms
+        if (rift.isFissure) {
+          if (rift.isCore) {
+            if (vType === VOXEL_ABYSS_TRENCH && grain > 218) {
+              // Hydrothermal black smoker vent spark (bioluminescent teal heat)
+              r = 14; g = 44; b = 58;
+            } else {
+              // Deep, near-black abyss centers: #05080c (exact requirement)
+              r = 5; g = 8; b = 12;
+            }
+          } else {
+            // Chasm wall shadow gradient toward abyss center
+            const wallT = Math.max(0, Math.min(1.0, rift.crackDist / rift.halfWidth));
+            r = Math.round(5 * (1 - wallT) + 10 * wallT);
+            g = Math.round(8 * (1 - wallT) + 14 * wallT);
+            b = Math.round(12 * (1 - wallT) + 20 * wallT);
+          }
+        } else if (rift.isLip) {
+          // 1px lighter basalt lips on the edges to simulate depth (exact requirement)
+          r = Math.min(255, r + 18);
+          g = Math.min(255, g + 20);
+          b = Math.min(255, b + 24);
+        }
+
+        const pixelColor = packABGR(r, g, b, 255);
+
+        // Native 1:1 pixel blit directly into 32-bit canvas buffer
+        buf32[yW0 + wx] = pixelColor;
+      }
+    }
+
+    ctxL1.putImageData(imgDataL1, 0, 0);
+  }
+
+
+  /**
+   * Bakes Layer 4 Bathymetric Water Base into an offscreen canvas.
+   * Uses a continuous 5-stop cubic smoothstep spline to eliminate all chunk staircases.
+   */
+  function bakeWaterBathymetry() {
+    ctxL4_bathymetry.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    const imgDataL4 = ctxL4_bathymetry.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
+    const dataL4 = imgDataL4.data;
+
+    const BLOCK = 4;
+    const cols = WORLD_WIDTH / BLOCK;
+    const rows = WORLD_HEIGHT / BLOCK;
+
+    const shallowAlpha = config.water.shallowAlpha;
+    const deepAlpha = config.water.deepAlpha;
+
+    // 5-Stop Continuous Bathymetric Color Stops
+    // [elev, R, G, B, alpha]
+    const stops = [
+      [0.08, 5, 9, 20, deepAlpha],                                    // 0: Abyss Deep Trench
+      [0.20, 10, 27, 56, deepAlpha],                                   // 1: Pelagic Ocean
+      [0.32, 14, 69, 112, deepAlpha * 0.65 + shallowAlpha * 0.35],    // 2: Continental Shelf
+      [0.40, 18, 140, 158, deepAlpha * 0.25 + shallowAlpha * 0.75],   // 3: Coastal Lagoon / Shoal
+      [ELEV_SHALLOW_WATER, 34, 211, 238, shallowAlpha]                // 4: Shoreline Shallows (pale cyan)
+    ];
+
+    for (let by = 0; by < rows; by++) {
+      const wy = by * BLOCK;
+      for (let bx = 0; bx < cols; bx++) {
+        const wx = bx * BLOCK;
+        const elev = sampleElevation(wx, wy);
+
+        // Water only covers areas where elevation < ELEV_SHALLOW_WATER
+        if (elev >= ELEV_SHALLOW_WATER) continue;
+
+        let r = stops[0][1], g = stops[0][2], b = stops[0][3], a = stops[0][4];
+
+        if (elev <= stops[0][0]) {
+          r = stops[0][1]; g = stops[0][2]; b = stops[0][3]; a = stops[0][4];
+        } else {
+          // Find matching interval and interpolate with cubic smoothstep
+          for (let i = 0; i < stops.length - 1; i++) {
+            const e0 = stops[i][0];
+            const e1 = stops[i + 1][0];
+            if (elev >= e0 && elev <= e1) {
+              const t = (elev - e0) / (e1 - e0);
+              const s = t * t * (3 - 2 * t); // Cubic smoothstep
+
+              r = Math.round(stops[i][1] * (1 - s) + stops[i + 1][1] * s);
+              g = Math.round(stops[i][2] * (1 - s) + stops[i + 1][2] * s);
+              b = Math.round(stops[i][3] * (1 - s) + stops[i + 1][3] * s);
+              a = stops[i][4] * (1 - s) + stops[i + 1][4] * s;
+              break;
+            }
+          }
+        }
+
+        // Feather alpha slightly at the dry sand edge
+        if (elev > ELEV_SHALLOW_WATER - 0.008) {
+          const edgeFade = (ELEV_SHALLOW_WATER - elev) / 0.008;
+          a *= Math.max(0, Math.min(1.0, edgeFade));
+        }
+
+        const alphaInt = Math.round(a * 255);
+
+        for (let py = 0; py < BLOCK; py++) {
+          const cy = wy + py;
+          if (cy >= WORLD_HEIGHT) continue;
+          for (let px = 0; px < BLOCK; px++) {
+            const cx = wx + px;
+            if (cx >= WORLD_WIDTH) continue;
+            const idx = (cy * WORLD_WIDTH + cx) * 4;
+            dataL4[idx] = r;
+            dataL4[idx + 1] = g;
+            dataL4[idx + 2] = b;
+            dataL4[idx + 3] = alphaInt;
+          }
+        }
+      }
+    }
+
+    ctxL4_bathymetry.putImageData(imgDataL4, 0, 0);
+  }
+
+
+  /**
+   * Bakes Static Substrate Layers (L1, L2, L3, L4 bathymetry) into offscreen canvases.
+   * Executed once on load or when procedural noise parameters change.
+   */
+  function bakeStaticLayers() {
+    console.time('bakeStaticLayers');
+
+    // 0. Pre-evaluate continuous world elevation into fast lookup grid
+    computeElevationGrid();
+
+    // 1. Bake Bedrock (Layer 1) via flat typed voxel memory & direct Uint32Array 32-bit pipeline
+    bakeBedrockLayer();
+
+    // 2. Bake Topsoil, Earth & Beach Sand (Layer 2) & Biome Grass Field (Layer 3)
+    // Layer 2 is the continuous continental mantle over bedrock (inland loam, riverbed & beach dunes).
+    // Layer 3 (Biome / Grass Field) is temporarily cleared / empty as requested for substrate inspection.
+    ctxL2.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    const imgDataL2 = ctxL2.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
+    const bufL2 = new Uint32Array(imgDataL2.data.buffer);
+
+    ctxL3.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    const imgDataL3 = ctxL3.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
+    const bufL3 = new Uint32Array(imgDataL3.data.buffer);
+
+    const seed = config.noise.seed;
+
+
+
+    for (let by = 0; by < BEDROCK_ROWS; by++) {
+      const wy = by;
+      const yW0 = wy * WORLD_WIDTH;
+
+      for (let bx = 0; bx < BEDROCK_COLS; bx++) {
+        const wx = bx;
+
+        const elev = sampleElevation(wx, wy);
+
+        // Retrieve bedrock geological classification and tectonic fracture flags
+        const v = bedrockVoxels[yW0 + bx];
+        const isFissure = (v & VOXEL_FLAG_FISSURE) !== 0;
+        const isLip = (v & VOXEL_FLAG_LIP) !== 0;
+
+        const grainHash = hash2D(bx, by, seed + 511);
+
+        // --- Compute Layer 2: Continental Topsoil, Earth & Beach Sand ---
+        let soilAlpha = 0;
+        let r2 = 0, g2 = 0, b2 = 0;
+
+        // Continental bedrock fissures: on land (elev >= ELEV_DEEP_WATER), topsoil FILLS the fractures!
+        // Bedrock fissures only pierce through to abyss in open ocean floor (elev < ELEV_DEEP_WATER)
+        // or on high steep eroded bluffs (isRockyCrag).
+        if (isFissure && elev < ELEV_DEEP_WATER) {
+          soilAlpha = 0; // Seafloor abyss chasms exposed under ocean
+        } else if (elev >= ELEV_DEEP_WATER) {
+          // Check high rocky bluff / steep crag suppression (exposing sub-terrene granite bedrock slab)
+          const rockiness = simplex.noise2D(wx * 0.013 + 19.1, wy * 0.013 + 43.7);
+          const isRockyCrag = elev > 0.68 && rockiness > 0.72;
+
+          if (isRockyCrag) {
+            soilAlpha = 0; // Exposes bare granite bedrock underneath
+          } else {
+            // High-frequency mineral grain & loam noise
+            const microGrain = (simplex.noise2D(wx * 0.06, wy * 0.06) + 1.0) * 0.5;
+            const humusNoise = (simplex.noise2D(wx * 0.018, wy * 0.018) + 1.0) * 0.5;
+
+            // Check River System (Meandering Stream Channel)
+            const rInfo = getRiverInfo(wx, wy);
+
+            if (rInfo && rInfo.inWater) {
+              // RIVERBED: Smooth river pebbles, water-washed stones, and dark river silt
+              soilAlpha = 1.0;
+              const pebbleNoise = simplex.noise2D(wx * 0.16, wy * 0.16);
+              const siltGrain = (simplex.noise2D(wx * 0.05, wy * 0.05) + 1.0) * 0.5;
+
+              // Dark wet river silt & washed stones
+              let riverR = Math.round(76 + siltGrain * 18);
+              let riverG = Math.round(60 + siltGrain * 14);
+              let riverB = Math.round(42 + siltGrain * 12);
+
+              if (pebbleNoise > 0.65) {
+                // Smooth grey/amber river pebble
+                riverR += 38; riverG += 36; riverB += 32;
+              } else if (pebbleNoise < -0.65) {
+                // Deep river silt pit
+                riverR -= 16; riverG -= 14; riverB -= 10;
+              }
+
+              r2 = Math.max(0, Math.min(255, riverR));
+              g2 = Math.max(0, Math.min(255, riverG));
+              b2 = Math.max(0, Math.min(255, riverB));
+            } else if (elev < ELEV_SHALLOW_WATER) {
+              // 1. SUBMERGED SAND SHELF (beneath shallow water, down to ELEV_DEEP_WATER)
+              const subFade = Math.min(1.0, (elev - ELEV_DEEP_WATER) / (ELEV_SHALLOW_WATER - ELEV_DEEP_WATER));
+              soilAlpha = subFade;
+
+              // Wet seabed sand with subtle ripple shading
+              const waveRipple = Math.sin(wx * 0.035 + wy * 0.02) * 6;
+              r2 = Math.round(152 + waveRipple + microGrain * 14);
+              g2 = Math.round(128 + waveRipple + microGrain * 12);
+              b2 = Math.round(86  + waveRipple + microGrain * 10);
+            } else if (elev <= ELEV_SAND_EXTENT + 0.03) {
+              // 2. DRY COASTAL BEACH DUNES
+              // Transitions from beach sand into continental loam
+              soilAlpha = 1.0;
+              const sandT = Math.max(0, Math.min(1.0, (elev - ELEV_SHALLOW_WATER) / (ELEV_SAND_EXTENT + 0.03 - ELEV_SHALLOW_WATER)));
+
+              // Warm golden quartz beach sand
+              const duneRipple = Math.sin(wx * 0.028 - wy * 0.015) * 8;
+              let sandR = Math.round(218 + duneRipple + microGrain * 18);
+              let sandG = Math.round(186 + duneRipple + microGrain * 16);
+              let sandB = Math.round(130 + duneRipple + microGrain * 14);
+
+              // Dune crest micro quartz glint
+              if ((grainHash & 31) === 0) {
+                sandR += 22; sandG += 22; sandB += 20;
+              }
+
+              // Smooth cubic interpolation between coastal sand and inland earth/loam
+              if (sandT > 0.40) {
+                const blend = Math.max(0, Math.min(1.0, (sandT - 0.40) / 0.60));
+                const smoothBlend = blend * blend * (3 - 2 * blend);
+                const loamR = Math.round(118 + humusNoise * 20);
+                const loamG = Math.round(84  + humusNoise * 16);
+                const loamB = Math.round(52  + humusNoise * 12);
+
+                r2 = Math.round(sandR * (1 - smoothBlend) + loamR * smoothBlend);
+                g2 = Math.round(sandG * (1 - smoothBlend) + loamG * smoothBlend);
+                b2 = Math.round(sandB * (1 - smoothBlend) + loamB * smoothBlend);
+              } else {
+                r2 = sandR; g2 = sandG; b2 = sandB;
+              }
+            } else {
+              // 3. CONTINENTAL LOAM & FOREST TOPSOIL (Sectors 1, 2, 4, 5)
+              soilAlpha = 1.0;
+
+              // Topography moisture & elevation gradation
+              const moistGrade = (simplex.fbm(wx * 0.005, wy * 0.005, 3, 0.5, 2.0) + 1.0) * 0.5;
+              const inlandScore = Math.min(1.0, (elev - ELEV_SAND_EXTENT) / 0.35);
+
+              // Continental loam base: rich umber / dark sienna
+              // Deep highland forest (Sector 1 & 4) has darker rich humus
+              const baseR = Math.round(92 - inlandScore * 18 + moistGrade * 16 + humusNoise * 14);
+              const baseG = Math.round(64 - inlandScore * 14 + moistGrade * 12 + humusNoise * 10);
+              const baseB = Math.round(38 - inlandScore * 10 + moistGrade * 8  + humusNoise * 6);
+
+              r2 = baseR; g2 = baseG; b2 = baseB;
+
+              // Mineral tooth and root humus specs
+              if ((grainHash & 31) === 0) {
+                r2 += 16; g2 += 14; b2 += 10; // Pale mineral sand speck
+              } else if ((grainHash & 31) === 1) {
+                r2 -= 14; g2 -= 12; b2 -= 8;  // Dark decomposed humus pit
+              }
+            }
+
+            // Riverbank transition: moist river mud and dark silt near the water
+            if (rInfo && rInfo.bank) {
+              const bankT = (rInfo.normDist - 1.0) / 0.6; // [0, 1]
+              const mudR = Math.round(64 + microGrain * 14);
+              const mudG = Math.round(48 + microGrain * 10);
+              const mudB = Math.round(32 + microGrain * 8);
+              r2 = Math.round(mudR * (1 - bankT) + r2 * bankT);
+              g2 = Math.round(mudG * (1 - bankT) + g2 * bankT);
+              b2 = Math.round(mudB * (1 - bankT) + b2 * bankT);
+            }
+
+            // Inland topsoil over bedrock fissures: soil settles into a dark damp sediment trough (Question 1)
+            if (isFissure && elev >= ELEV_SHALLOW_WATER && (!rInfo || !rInfo.inWater)) {
+              r2 = Math.max(0, r2 - 14);
+              g2 = Math.max(0, g2 - 10);
+              b2 = Math.max(0, b2 - 8);
+            }
+
+            // Basalt lip edge exposure along chasms in open ocean/crags
+            if (isLip && elev < ELEV_SHALLOW_WATER && (grainHash & 3) === 0) {
+              soilAlpha = 0; // Let the 1px raised basalt lip peek through in shallow water
+            }
+          }
+        }
+
+        // --- Layer 3: Biome / Grass Field (Temporarily Cleared / Empty) ---
+        // Explicitly set to 0 as requested so bare topsoil and bedrock can be inspected
+        const pixelColorL2 = soilAlpha > 0 ? packABGR(r2, g2, b2, Math.round(soilAlpha * 255)) : 0;
+        bufL2[yW0 + wx] = pixelColorL2;
+
+        const pixelColorL3 = 0; // Layer 3 empty
+        bufL3[yW0 + wx] = pixelColorL3;
+      }
+    }
+
+    ctxL2.putImageData(imgDataL2, 0, 0);
+    ctxL3.putImageData(imgDataL3, 0, 0);
+
+    // Bake Continuous Bathymetric Base (Layer 4)
+    bakeWaterBathymetry();
+
+
+    // Reset water evaluation timer for immediate update
+    lastWaterEvalNow = 0;
+
+    console.timeEnd('bakeStaticLayers');
+    showToast('Substrate static cache re-baked (L1, L2, L3, L4)!');
+  }
+
+  // --- Dynamic Assets & Entities Showcase (Layer 5) ---
+  const assets = {};
+  const assetPaths = {
+    'house': 'fishers-house-turntable-palette.webp',
+    'barrel': 'wooden-barrel-turntable-palette.webp',
+    'dock': 'wooden-dock-turntable-palette.webp',
+    'palm': 'tropical-palm-tree-turntable-palette.webp',
+    'rock': 'rock-pile-turntable-palette.webp',
+    'piranha': 'piranha-turntable-palette.webp',
+    'player': 'rukiya-walking-walking-animation-palette.webp',
+    'net': 'fishers-net-turntable-palette.webp'
+  };
+
+  // Preload project assets
+  for (const [key, src] of Object.entries(assetPaths)) {
+    const img = new Image();
+    img.src = src;
+    img.onload = () => { assets[key] = img; };
+    img.onerror = () => {
+      assets[key] = null;
+    };
+  }
+
+  // Beach Camp Entity Catalog (Focused around Sector 5 promontory)
+  const entities = [
+    // Fisherman's Cottage / Beach Cabin at Camp Hub (Sector 5)
+    {
+      id: 'house',
+      asset: 'house',
+      x: 880,
+      y: 660,
+      renderWidth: 256,
+      renderHeight: 256,
+      anchorX: 128,
+      anchorY: 220,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    // Supply Barrels around the Camp Hub
+    {
+      id: 'barrel-1',
+      asset: 'barrel',
+      x: 960,
+      y: 690,
+      renderWidth: 64,
+      renderHeight: 64,
+      anchorX: 32,
+      anchorY: 60,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    {
+      id: 'barrel-2',
+      asset: 'barrel',
+      x: 1010,
+      y: 720,
+      renderWidth: 64,
+      renderHeight: 64,
+      anchorX: 32,
+      anchorY: 60,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    {
+      id: 'barrel-3',
+      asset: 'barrel',
+      x: 820,
+      y: 710,
+      renderWidth: 64,
+      renderHeight: 64,
+      anchorX: 32,
+      anchorY: 60,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    // Fisher's Net on drying rack
+    {
+      id: 'net-1',
+      asset: 'net',
+      x: 1120,
+      y: 750,
+      renderWidth: 110,
+      renderHeight: 100,
+      anchorX: 55,
+      anchorY: 85,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    // Wooden Pier / Dock: Extending out from Sector 5 beach into Sector 6 waters!
+    {
+      id: 'dock',
+      asset: 'dock',
+      x: 1240,
+      y: 770,
+      renderWidth: 180,
+      renderHeight: 130,
+      anchorX: 90,
+      anchorY: 80,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    // Cozy Beach Campfire on the sand with glowing embers
+    {
+      id: 'campfire',
+      asset: 'campfire',
+      x: 1040,
+      y: 840,
+      renderWidth: 70,
+      renderHeight: 70,
+      anchorX: 35,
+      anchorY: 55,
+      isCampfire: true
+    },
+    // Rustic Timber River Bridge: Carries Continental North Highway across the river!
+    {
+      id: 'river-bridge',
+      asset: 'bridge',
+      isBridge: true,
+      x: 920,
+      y: 450,
+      renderWidth: 64,
+      renderHeight: 88,
+      anchorX: 32,
+      anchorY: 44
+    },
+    // Tropical Palm Trees lining the dunes & headland
+    {
+      id: 'palm-1',
+      asset: 'palm',
+      x: 1160,
+      y: 590,
+      renderWidth: 140,
+      renderHeight: 180,
+      anchorX: 70,
+      anchorY: 175,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    {
+      id: 'palm-2',
+      asset: 'palm',
+      x: 1260,
+      y: 910,
+      renderWidth: 140,
+      renderHeight: 180,
+      anchorX: 70,
+      anchorY: 175,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    {
+      id: 'palm-3',
+      asset: 'palm',
+      x: 1080,
+      y: 960,
+      renderWidth: 140,
+      renderHeight: 180,
+      anchorX: 70,
+      anchorY: 175,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    {
+      id: 'palm-4',
+      asset: 'palm',
+      x: 840,
+      y: 960,
+      renderWidth: 140,
+      renderHeight: 180,
+      anchorX: 70,
+      anchorY: 175,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    {
+      id: 'palm-5',
+      asset: 'palm',
+      x: 640,
+      y: 860,
+      renderWidth: 140,
+      renderHeight: 180,
+      anchorX: 70,
+      anchorY: 175,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    {
+      id: 'palm-6',
+      asset: 'palm',
+      x: 520,
+      y: 620,
+      renderWidth: 140,
+      renderHeight: 180,
+      anchorX: 70,
+      anchorY: 175,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    // Tidal Rock Piles in the coastal waters
+    {
+      id: 'rock-1',
+      asset: 'rock',
+      x: 1380,
+      y: 490,
+      renderWidth: 96,
+      renderHeight: 80,
+      anchorX: 48,
+      anchorY: 72,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    {
+      id: 'rock-2',
+      asset: 'rock',
+      x: 1340,
+      y: 860,
+      renderWidth: 96,
+      renderHeight: 80,
+      anchorX: 48,
+      anchorY: 72,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    {
+      id: 'rock-3',
+      asset: 'rock',
+      x: 520,
+      y: 1140,
+      renderWidth: 96,
+      renderHeight: 80,
+      anchorX: 48,
+      anchorY: 72,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0
+    },
+    // Swimming Piranhas in open oceanic waters (Sectors 3, 6, 8, 9)
+    {
+      id: 'piranha-1',
+      asset: 'piranha',
+      x: 1540,
+      y: 640,
+      renderWidth: 64,
+      renderHeight: 64,
+      anchorX: 32,
+      anchorY: 32,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0,
+      isSwimmer: true,
+      phase: 0
+    },
+    {
+      id: 'piranha-2',
+      asset: 'piranha',
+      x: 1580,
+      y: 890,
+      renderWidth: 64,
+      renderHeight: 64,
+      anchorX: 32,
+      anchorY: 32,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0,
+      isSwimmer: true,
+      phase: 1.8
+    },
+    {
+      id: 'piranha-3',
+      asset: 'piranha',
+      x: 1360,
+      y: 1280,
+      renderWidth: 64,
+      renderHeight: 64,
+      anchorX: 32,
+      anchorY: 32,
+      frameWidth: 128,
+      frameHeight: 128,
+      frameX: 0,
+      frameY: 0,
+      isSwimmer: true,
+      phase: 3.2
+    }
+  ];
+
+  // Playable Character State (Rukiya starting at Beach Camp in Sector 5)
+  const player = {
+    x: 980,
+    y: 740,
+    speed: 180, // px per sec
+    dir: 0,     // 0: down, 1: right, 2: up, 3: left
+    walking: false,
+    animTime: 0,
+    renderWidth: 96,
+    renderHeight: 96,
+    anchorX: 48,
+    anchorY: 90,
+    frameWidth: 128,
+    frameHeight: 128
+  };
+
+  // Keyboard controls
+  const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
+  window.addEventListener('keydown', (e) => {
+    if (keys.hasOwnProperty(e.key)) {
+      keys[e.key] = true;
+      e.preventDefault();
+    }
+  });
+  window.addEventListener('keyup', (e) => {
+    if (keys.hasOwnProperty(e.key)) {
+      keys[e.key] = false;
+      e.preventDefault();
+    }
+  });
+
+  /**
+   * Update character movement and animation
+   */
+  function updatePlayer(dt) {
+    let dx = 0;
+    let dy = 0;
+
+    if (keys.w || keys.ArrowUp) { dy -= 1; player.dir = 2; }
+    if (keys.s || keys.ArrowDown) { dy += 1; player.dir = 0; }
+    if (keys.a || keys.ArrowLeft) { dx -= 1; player.dir = 3; }
+    if (keys.d || keys.ArrowRight) { dx += 1; player.dir = 1; }
+
+    if (dx !== 0 && dy !== 0) {
+      dx *= 0.7071;
+      dy *= 0.7071;
+    }
+
+    if (dx !== 0 || dy !== 0) {
+      player.x += dx * player.speed * dt;
+      player.y += dy * player.speed * dt;
+      player.walking = true;
+      player.animTime += dt;
+
+      // Clamp to world
+      player.x = Math.max(64, Math.min(WORLD_WIDTH - 64, player.x));
+      player.y = Math.max(64, Math.min(WORLD_HEIGHT - 64, player.y));
+    } else {
+      player.walking = false;
+      player.animTime = 0;
+    }
+
+    // Update HUD Stats
+    const playerTileX = Math.floor(player.x / TILE_SIZE);
+    const playerTileY = Math.floor(player.y / TILE_SIZE);
+    document.getElementById('stat-player-pos').innerText = `(${playerTileX}, ${playerTileY})`;
+
+    const curElev = getElevation(player.x, player.y);
+    const curSector = getSectorAt(player.x, player.y);
+    const sectorEl = document.getElementById('stat-sector');
+    if (sectorEl) {
+      sectorEl.innerText = `Sec ${curSector.id}: ${curSector.name} ${curSector.icon}`;
+      sectorEl.style.color = curSector.badge;
+    }
+
+    const pBx = Math.max(0, Math.min(BEDROCK_COLS - 1, Math.floor(player.x / BEDROCK_BLOCK)));
+    const pBy = Math.max(0, Math.min(BEDROCK_ROWS - 1, Math.floor(player.y / BEDROCK_BLOCK)));
+    const pV = bedrockVoxels[pBy * BEDROCK_COLS + pBx];
+
+    const rInfo = getRiverInfo(player.x, player.y);
+    const onBridge = Math.hypot(player.x - 920, player.y - 450) < 36;
+
+    let substrateName = 'Continental Loam 🍂';
+    if (onBridge) substrateName = 'Wooden River Bridge 🪵';
+    else if (rInfo && rInfo.inWater) substrateName = 'Flowing Stream 🏞️';
+    else if (rInfo && rInfo.bank) substrateName = 'Moist Riverbank 🌾';
+    else if ((pV & VOXEL_FLAG_CORE) !== 0) substrateName = 'Abyss Chasm 🌋';
+    else if ((pV & VOXEL_FLAG_FISSURE) !== 0 && curElev < ELEV_DEEP_WATER) substrateName = 'Submarine Rift 🌋';
+    else if ((pV & VOXEL_FLAG_LIP) !== 0) substrateName = 'Basalt Lip 🪨';
+    else if (curElev < ELEV_DEEP_WATER) substrateName = 'Deep Ocean 🌊';
+    else if (curElev < ELEV_SHALLOW_WATER) substrateName = 'Shallow Water 💦';
+    else if (curElev <= ELEV_SAND_EXTENT + 0.03) substrateName = 'Beach Sand 🏖️';
+    document.getElementById('stat-player-substr').innerText = substrateName;
+  }
+
+  // --- Main Canvas 2D Setup & Rendering Loop ---
+  const canvas = document.getElementById('worldCanvas');
+  const ctx = canvas.getContext('2d');
+
+  let lastTime = performance.now();
+  let frameCount = 0;
+  let fpsTimer = 0;
+
+  /**
+   * Main Render Frame
+   */
+  function renderFrame(now) {
+    const dt = Math.min(0.1, (now - lastTime) / 1000);
+    lastTime = now;
+
+    // FPS Meter
+    frameCount++;
+    fpsTimer += dt;
+    if (fpsTimer >= 0.5) {
+      const fps = Math.round(frameCount / fpsTimer);
+      document.getElementById('stat-fps').innerText = fps;
+      frameCount = 0;
+      fpsTimer = 0;
+    }
+
+    // Update simulations
+    updatePlayer(dt);
+
+    const timeSec = now * 0.001;
+
+    // Clear main frame
+    ctx.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+
+    // -------------------------------------------------------------
+    // PASS 1: COMPOSITE STATIC SUBSTRATE (Layers 1 to 3)
+    // -------------------------------------------------------------
+    if (config.layers.l1) {
+      ctx.drawImage(canvasL1, 0, 0);
+    }
+
+    if (config.layers.l2) {
+      ctx.drawImage(canvasL2, 0, 0);
+    }
+
+    if (config.layers.l3) {
+      ctx.drawImage(canvasL3, 0, 0);
+    }
+
+    // -------------------------------------------------------------
+    // PASS 2: DYNAMIC FLOWING WATER & OCEAN SWELLS (Layer 4)
+    // Evaluated strictly 10 times per second (10 FPS retro cadence) at 1/6x tranquil speed
+    // -------------------------------------------------------------
+    if (now - lastWaterEvalNow >= WATER_UPDATE_INTERVAL_MS) {
+      lastWaterEvalNow = now;
+      const slowWaterTimeSec = (now / 1000) / 6.0; // 6x speed reduction
+      renderWaterLayer(ctxL4_water, slowWaterTimeSec);
+    }
+
+    if (config.layers.l4) {
+      ctx.drawImage(canvasL4_water, 0, 0);
+    }
+
+    // Optional 3x3 Sectors Diagnostic Overlay
+    if (config.debug.showSectors) {
+      renderSectorsOverlay(ctx);
+    }
+
+    // Optional 64px Grid Overlay
+    if (config.debug.showGrid) {
+      renderGridOverlay(ctx);
+    }
+
+    // -------------------------------------------------------------
+    // PASS 3: Y-SORTED ENTITIES & PROPS (Layer 5)
+    // -------------------------------------------------------------
+    if (config.layers.l5) {
+      renderEntitiesLayer(ctx, timeSec);
+    }
+
+    requestAnimationFrame(renderFrame);
+  }
+
+  /**
+   * Render Layer 4: Flowing Water & Ocean Swells
+   * 2-Stage Pipeline: Composites continuous pre-baked bathymetry base,
+   * adds traveling ocean swell ribbons, and renders cohesive contour-following surf loops.
+   */
+  function renderWaterLayer(targetCtx, timeSec) {
+    targetCtx.save();
+
+    // 1. Composite Continuous Pre-baked Bathymetric Water Base
+    targetCtx.drawImage(canvasL4_bathymetry, 0, 0);
+
+    const waterSpeed = config.water.waterSpeed;
+
+    // Helper to stroke clipped ocean swell polylines with depth and crest highlight
+    function drawSwellPath(ctx, path) {
+      if (path.length < 2) return;
+      const avgAlpha = path.reduce((sum, p) => sum + p.alpha, 0) / path.length;
+
+      // Broad soft swell body
+      ctx.beginPath();
+      ctx.moveTo(path[0].x, path[0].y);
+      for (let i = 1; i < path.length; i++) {
+        ctx.lineTo(path[i].x, path[i].y);
+      }
+      ctx.strokeStyle = `rgba(147, 197, 253, ${(0.09 * avgAlpha).toFixed(3)})`;
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+
+      // Shimmering swell crest highlight
+      ctx.beginPath();
+      ctx.moveTo(path[0].x, path[0].y);
+      for (let i = 1; i < path.length; i++) {
+        ctx.lineTo(path[i].x, path[i].y);
+      }
+      ctx.strokeStyle = `rgba(224, 242, 254, ${(0.18 * avgAlpha).toFixed(3)})`;
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    }
+
+    // 2. Continuous Traveling Deep Ocean Swells (Rolling from Bottom-Right / SE toward Top-Left / NW)
+    // Physically stopped and reflected by the shoreline; strictly masked out over continental landmass
+    const ux = -0.76, uy = -0.65; // Inward propagation vector from SE to NW
+    const vx = -0.65, vy = 0.76;  // Orthogonal wavefront tangent vector
+    const cx = WORLD_WIDTH * 0.5;
+    const cy = WORLD_HEIGHT * 0.5;
+
+    const numSwells = 12;
+    const waveSpacing = 200;
+    const waveCycle = numSwells * waveSpacing;
+    const travelProgress = (timeSec * waterSpeed * 110) % waveCycle;
+
+    for (let s = 0; s < numSwells; s++) {
+      // Swells roll inward from far open ocean (w < 0) toward coast (w > 0)
+      const w = ((s * waveSpacing + travelProgress) % waveCycle) - 1500;
+      const steps = 44;
+
+      let currentPath = [];
+
+      for (let st = 0; st <= steps; st++) {
+        const t = st / steps;
+        const v = (t - 0.5) * 2600;
+        const undulate = Math.sin(t * 7.5 + s * 1.5 + timeSec * 0.7) * 22;
+        const wx = cx + w * ux + v * vx + undulate * ux;
+        const wy = cy + w * uy + v * vy + undulate * uy;
+
+        if (wx >= -40 && wx <= WORLD_WIDTH + 40 && wy >= -40 && wy <= WORLD_HEIGHT + 40) {
+          const elev = getMacroCoastElevation(wx, wy);
+
+          // Strictly ocean water only (elev < ELEV_SHALLOW_WATER = 0.44)
+          // Waves never cross onto the solid continental landmass or enter inland rivers!
+          if (elev < ELEV_SHALLOW_WATER) {
+            // Shoaling factor: waves gently fade and compress as they approach the shoreline
+            let alpha = 1.0;
+            if (elev >= ELEV_DEEP_WATER) {
+              const distToShore = ELEV_SHALLOW_WATER - elev; // [0, 0.16]
+              const shoalFade = Math.max(0, Math.min(1.0, distToShore / 0.12));
+
+              // Slight shoreline reflection: faint backwash pulse radiating outward from shore
+              const reflectPulse = Math.sin(timeSec * waterSpeed * 3.8 - distToShore * 42.0) * 0.16;
+              alpha = Math.max(0, Math.min(1.0, shoalFade + reflectPulse * (1.0 - shoalFade)));
+            }
+
+            if (alpha > 0.05) {
+              currentPath.push({ x: wx, y: wy, alpha });
+            } else {
+              if (currentPath.length >= 2) drawSwellPath(targetCtx, currentPath);
+              currentPath = [];
+            }
+          } else {
+            // Land detected! Terminate swell stroke at the shoreline
+            if (currentPath.length >= 2) drawSwellPath(targetCtx, currentPath);
+            currentPath = [];
+          }
+        } else {
+          if (currentPath.length >= 2) drawSwellPath(targetCtx, currentPath);
+          currentPath = [];
+        }
+      }
+
+      if (currentPath.length >= 2) {
+        drawSwellPath(targetCtx, currentPath);
+      }
+    }
+
+    // 3. Directional Meandering River Flow Currents (Flowing Downstream NW -> SE)
+    const downstreamSpeed = timeSec * 45.0; // Steady downstream flow velocity
+
+    for (let sIdx = 0; sIdx < riverSegments.length; sIdx++) {
+      const seg = riverSegments[sIdx];
+      if (seg.globalT > 0.92) continue; // Estuary blend
+
+      const perpX = -seg.dy;
+      const perpY = seg.dx;
+
+      // A. Downstream Flowing Streamlines (Negative lineDashOffset pushes dashes downstream)
+      for (const offRatio of [-0.45, 0.0, 0.45]) {
+        const offDist = seg.halfWidth * offRatio;
+        const sx1 = seg.x1 + perpX * offDist;
+        const sy1 = seg.y1 + perpY * offDist;
+        const sx2 = seg.x2 + perpX * offDist;
+        const sy2 = seg.y2 + perpY * offDist;
+
+        targetCtx.save();
+        targetCtx.beginPath();
+        targetCtx.moveTo(sx1, sy1);
+        targetCtx.lineTo(sx2, sy2);
+        targetCtx.setLineDash([12, 16, 6, 20]);
+        // Negative offset translates dash pattern downstream along the segment vector
+        targetCtx.lineDashOffset = -downstreamSpeed * (offRatio === 0.0 ? 1.25 : 0.95) - sIdx * 8;
+        targetCtx.strokeStyle = offRatio === 0.0 ? 'rgba(210, 240, 255, 0.32)' : 'rgba(180, 225, 248, 0.22)';
+        targetCtx.lineWidth = 1.5;
+        targetCtx.stroke();
+        targetCtx.restore();
+      }
+
+      // B. Downstream V-Shaped Chevron Ripples (Natural River Current Formation)
+      // Natural currents form V-crests pointing downstream in the direction of travel
+      const numRipples = Math.max(1, Math.round(seg.length / 32));
+      for (let r = 0; r < numRipples; r++) {
+        const ripplePhase = ((downstreamSpeed * 0.8 + sIdx * 24 + r * (seg.length / numRipples)) % seg.length) / seg.length;
+        // Traveling downstream from seg.x1,y1 to seg.x2,y2
+        const t = ripplePhase;
+        const cx = seg.x1 + seg.dx * (seg.length * t) + seg.dx * 3.5;
+        const cy = seg.y1 + seg.dy * (seg.length * t) + seg.dy * 3.5;
+
+        // Chevron wings point slightly backward/upstream toward the banks
+        const wingDist = seg.halfWidth * 0.55;
+        const backDist = 4.0;
+        const lx = seg.x1 + seg.dx * (seg.length * t - backDist) + perpX * wingDist;
+        const ly = seg.y1 + seg.dy * (seg.length * t - backDist) + perpY * wingDist;
+        const rx = seg.x1 + seg.dx * (seg.length * t - backDist) - perpX * wingDist;
+        const ry = seg.y1 + seg.dy * (seg.length * t - backDist) - perpY * wingDist;
+
+        targetCtx.beginPath();
+        targetCtx.moveTo(lx, ly);
+        targetCtx.quadraticCurveTo(cx, cy, rx, ry);
+        targetCtx.strokeStyle = 'rgba(225, 245, 255, 0.26)';
+        targetCtx.lineWidth = 1.2;
+        targetCtx.stroke();
+      }
+
+      // C. Drifting River Current Flecks & Sparkling Micro-Riffles (Floating strictly downstream)
+      if (sIdx % 2 === 0) {
+        const fleckProgress = ((downstreamSpeed * 1.1 + sIdx * 37) % seg.length);
+        const latJitter = Math.sin(sIdx * 2.3 + downstreamSpeed * 0.1) * (seg.halfWidth * 0.4);
+        const fx = seg.x1 + seg.dx * fleckProgress + perpX * latJitter;
+        const fy = seg.y1 + seg.dy * fleckProgress + perpY * latJitter;
+
+        targetCtx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+        const sz = 1;
+        targetCtx.fillRect(fx, fy, sz, sz);
+      }
+    }
+
+    targetCtx.restore();
+  }
+
+  /**
+   * Render Layer 5: Entities & Props with Oblique 2.5D Stacking & Submerged Foot Wash
+   */
+  function renderEntitiesLayer(targetCtx, timeSec) {
+    // 1. Gather all dynamic renderables (Props + Player)
+    const renderList = [...entities];
+
+    // Add Player
+    renderList.push({
+      id: 'player',
+      isPlayer: true,
+      asset: 'player',
+      x: player.x,
+      y: player.y,
+      renderWidth: player.renderWidth,
+      renderHeight: player.renderHeight,
+      anchorX: player.anchorX,
+      anchorY: player.anchorY,
+      frameWidth: player.frameWidth,
+      frameHeight: player.frameHeight,
+      dir: player.dir,
+      walking: player.walking,
+      animTime: player.animTime
+    });
+
+    // 2. Continuous Dynamic Y-Depth Sorting:
+    // Sort strictly by the entity foot position (bottom-most contact point)
+    renderList.sort((a, b) => a.y - b.y);
+
+    // 3. Render Each Entity in Order
+    for (const ent of renderList) {
+      const screenX = Math.round(ent.x - ent.anchorX);
+      const screenY = Math.round(ent.y - ent.anchorY);
+
+      // Check if entity is standing in water (Submerged check)
+      const footElev = getElevation(ent.x, ent.y);
+      const isSubmerged = footElev < ELEV_SHALLOW_WATER;
+
+      // Piranhas have idle bobbing motion
+      let offsetY = 0;
+      if (ent.isSwimmer) {
+        offsetY = Math.sin(timeSec * 3.0 + ent.phase) * 3;
+      }
+
+      // Check if asset image is ready
+      const img = assets[ent.asset];
+      const isReady = img && img.complete && img.naturalWidth > 0;
+
+      if (isReady) {
+        // Sprite sheet frame slicing
+        let srcX = ent.frameX || 0;
+        let srcY = ent.frameY || 0;
+
+        if (ent.isPlayer) {
+          const frameIdx = ent.walking ? Math.floor(ent.animTime * 10) % 8 : 0;
+          srcX = frameIdx * ent.frameWidth;
+          srcY = ent.dir * ent.frameHeight;
+        }
+
+        targetCtx.drawImage(
+          img,
+          srcX, srcY, ent.frameWidth, ent.frameHeight,
+          screenX, screenY + offsetY, ent.renderWidth, ent.renderHeight
+        );
+      } else {
+        // Procedural 2.5D Fallback Placeholder Graphic
+        renderFallbackEntity(targetCtx, ent, screenX, screenY + offsetY);
+      }
+
+      // -------------------------------------------------------------
+      // Submerged Foot Wash & Ripple Effect (when standing in water)
+      // -------------------------------------------------------------
+      const onBridge = ent.isPlayer && (Math.hypot(ent.x - 920, ent.y - 450) < 36);
+      if (isSubmerged && !ent.isSwimmer && !onBridge) {
+        targetCtx.save();
+
+        // 1. Water wash tint over submerged lower feet
+        targetCtx.fillStyle = 'rgba(6, 182, 212, 0.48)';
+        const washHeight = Math.min(16, (ELEV_SHALLOW_WATER - footElev) * 60 + 6);
+        targetCtx.fillRect(screenX, ent.y - washHeight, ent.renderWidth, washHeight);
+
+        // 2. Expanding circular wake ripples around submerged feet
+        const ripplePhase = (timeSec * 2.5 + ent.x) % (Math.PI * 2);
+        const rippleRad = 10 + Math.sin(ripplePhase) * 6;
+        const rippleAlpha = Math.max(0, 0.6 - (rippleRad / 18));
+
+        targetCtx.strokeStyle = `rgba(255, 255, 255, ${rippleAlpha.toFixed(2)})`;
+        targetCtx.lineWidth = 1.5;
+        targetCtx.beginPath();
+        targetCtx.ellipse(ent.x, ent.y, rippleRad, rippleRad * 0.45, 0, 0, Math.PI * 2);
+        targetCtx.stroke();
+
+        targetCtx.restore();
+      }
+    }
+  }
+
+  /**
+   * Procedural 2.5D fallback graphics if external WebP sprite is loading
+   */
+  function renderFallbackEntity(targetCtx, ent, sx, sy) {
+    targetCtx.save();
+    if (ent.isPlayer) {
+      // Stylized Character
+      targetCtx.fillStyle = '#f59e0b';
+      targetCtx.fillRect(sx + 24, sy + 16, 48, 64);
+      // Head
+      targetCtx.fillStyle = '#fcd34d';
+      targetCtx.beginPath();
+      targetCtx.arc(sx + 48, sy + 24, 16, 0, Math.PI * 2);
+      targetCtx.fill();
+      // Eyes / Dir indicator
+      targetCtx.fillStyle = '#1e293b';
+      targetCtx.fillRect(sx + 42, sy + 22, 4, 4);
+      targetCtx.fillRect(sx + 52, sy + 22, 4, 4);
+    } else if (ent.isCampfire) {
+      // Animated crackling beach campfire
+      const firePhase = performance.now() * 0.006;
+      // Fire pit stones
+      targetCtx.fillStyle = '#475569';
+      targetCtx.beginPath();
+      targetCtx.ellipse(sx + 35, sy + 50, 24, 12, 0, 0, Math.PI * 2);
+      targetCtx.fill();
+      // Glowing embers
+      targetCtx.fillStyle = '#ea580c';
+      targetCtx.beginPath();
+      targetCtx.ellipse(sx + 35, sy + 48, 16, 8, 0, 0, Math.PI * 2);
+      targetCtx.fill();
+      // Flickering flame tongue
+      const fH = 22 + Math.sin(firePhase * 3.2) * 6;
+      targetCtx.fillStyle = '#fbbf24';
+      targetCtx.beginPath();
+      targetCtx.moveTo(sx + 24, sy + 50);
+      targetCtx.quadraticCurveTo(sx + 35 + Math.sin(firePhase * 4) * 4, sy + 50 - fH, sx + 46, sy + 50);
+      targetCtx.fill();
+      // Campfire warm light circle
+      targetCtx.fillStyle = 'rgba(251, 191, 36, 0.12)';
+      targetCtx.beginPath();
+      targetCtx.arc(sx + 35, sy + 48, 60 + Math.sin(firePhase * 2.5) * 6, 0, Math.PI * 2);
+      targetCtx.fill();
+    } else if (ent.asset === 'net') {
+      // Fisher's drying net rack
+      targetCtx.fillStyle = '#78350f';
+      targetCtx.fillRect(sx + 10, sy + 20, 8, 65);
+      targetCtx.fillRect(sx + ent.renderWidth - 18, sy + 20, 8, 65);
+      targetCtx.fillRect(sx + 10, sy + 25, ent.renderWidth - 28, 6);
+      targetCtx.fillStyle = 'rgba(148, 163, 184, 0.65)';
+      targetCtx.fillRect(sx + 18, sy + 31, ent.renderWidth - 36, 42);
+    } else if (ent.asset === 'house') {
+      // Cottage
+      targetCtx.fillStyle = '#b45309';
+      targetCtx.fillRect(sx + 32, sy + 100, 192, 140);
+      // Roof
+      targetCtx.fillStyle = '#dc2626';
+      targetCtx.beginPath();
+      targetCtx.moveTo(sx + 20, sy + 100);
+      targetCtx.lineTo(sx + 128, sy + 20);
+      targetCtx.lineTo(sx + 236, sy + 100);
+      targetCtx.closePath();
+      targetCtx.fill();
+    } else if (ent.asset === 'barrel') {
+      // Barrel
+      targetCtx.fillStyle = '#78350f';
+      targetCtx.fillRect(sx + 12, sy + 12, 40, 48);
+      targetCtx.fillStyle = '#451a03';
+      targetCtx.fillRect(sx + 12, sy + 20, 40, 4);
+      targetCtx.fillRect(sx + 12, sy + 44, 40, 4);
+    } else if (ent.isBridge || ent.asset === 'bridge') {
+      // Rustic Timber Bridge across the River
+      // Bridge stringers (dark wood beams)
+      targetCtx.fillStyle = '#451a03';
+      targetCtx.fillRect(sx + 4, sy + 6, 8, ent.renderHeight - 12);
+      targetCtx.fillRect(sx + ent.renderWidth - 12, sy + 6, 8, ent.renderHeight - 12);
+
+      // Horizontal wooden floor planks
+      for (let py = 8; py < ent.renderHeight - 10; py += 10) {
+        targetCtx.fillStyle = (py % 20 === 8) ? '#78350f' : '#92400e';
+        targetCtx.fillRect(sx + 6, sy + py, ent.renderWidth - 12, 8);
+        targetCtx.strokeStyle = '#451a03';
+        targetCtx.lineWidth = 1;
+        targetCtx.strokeRect(sx + 6, sy + py, ent.renderWidth - 12, 8);
+      }
+
+      // Wooden railings and posts
+      targetCtx.fillStyle = '#b45309';
+      targetCtx.fillRect(sx + 2, sy + 4, 4, ent.renderHeight - 8);
+      targetCtx.fillRect(sx + ent.renderWidth - 6, sy + 4, 4, ent.renderHeight - 8);
+
+      // Post caps
+      targetCtx.fillStyle = '#fde68a';
+      targetCtx.fillRect(sx + 1, sy + 2, 6, 5);
+      targetCtx.fillRect(sx + 1, sy + ent.renderHeight - 7, 6, 5);
+      targetCtx.fillRect(sx + ent.renderWidth - 7, sy + 2, 6, 5);
+      targetCtx.fillRect(sx + ent.renderWidth - 7, sy + ent.renderHeight - 7, 6, 5);
+    } else if (ent.asset === 'dock') {
+      // Wooden Pier
+      targetCtx.fillStyle = '#92400e';
+      targetCtx.fillRect(sx, sy + 40, ent.renderWidth, 40);
+      // Planks
+      targetCtx.strokeStyle = '#451a03';
+      targetCtx.lineWidth = 2;
+      for (let p = 0; p < ent.renderWidth; p += 16) {
+        targetCtx.strokeRect(sx + p, sy + 40, 16, 40);
+      }
+    } else if (ent.asset === 'palm') {
+      // Palm Tree
+      targetCtx.fillStyle = '#78350f';
+      targetCtx.fillRect(sx + 64, sy + 60, 12, 115);
+      // Palm fronds
+      targetCtx.fillStyle = '#16a34a';
+      targetCtx.beginPath();
+      targetCtx.arc(sx + 70, sy + 50, 40, 0, Math.PI * 2);
+      targetCtx.fill();
+    } else {
+      // Generic Prop
+      targetCtx.fillStyle = '#64748b';
+      targetCtx.fillRect(sx + 8, sy + 8, ent.renderWidth - 16, ent.renderHeight - 16);
+    }
+    targetCtx.restore();
+  }
+
+  /**
+   * 3x3 Sector Grid Overlay (Continental SE Corner Diagnostic)
+   * Shows sectors [1]..[9] with dashed boundary lines and sector badges.
+   */
+  function renderSectorsOverlay(targetCtx) {
+    targetCtx.save();
+    
+    // Dashed lines dividing 3x3 sectors
+    targetCtx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+    targetCtx.lineWidth = 1.5;
+    targetCtx.setLineDash([8, 6]);
+
+    // Vertical lines at x = 640 and 1280
+    for (let c = 1; c < SECTOR_COLS; c++) {
+      const sx = c * SECTOR_WIDTH;
+      targetCtx.beginPath();
+      targetCtx.moveTo(sx, 0);
+      targetCtx.lineTo(sx, WORLD_HEIGHT);
+      targetCtx.stroke();
+    }
+
+    // Horizontal lines at y = 512 and 1024
+    for (let r = 1; r < SECTOR_ROWS; r++) {
+      const sy = r * SECTOR_HEIGHT;
+      targetCtx.beginPath();
+      targetCtx.moveTo(0, sy);
+      targetCtx.lineTo(WORLD_WIDTH, sy);
+      targetCtx.stroke();
+    }
+
+    targetCtx.setLineDash([]);
+
+    // Draw stylish corner sector tags
+    targetCtx.font = '600 13px ui-monospace, SFMono-Regular, Menlo, monospace';
+    for (const sec of SECTOR_METADATA) {
+      const bx = sec.col * SECTOR_WIDTH + 14;
+      const by = sec.row * SECTOR_HEIGHT + 24;
+
+      const isLand = sec.type === 'Land';
+      const tagBg = isLand ? 'rgba(16, 185, 129, 0.22)' : 'rgba(14, 165, 233, 0.22)';
+      const tagBorder = isLand ? 'rgba(52, 211, 153, 0.55)' : 'rgba(56, 189, 248, 0.55)';
+      const tagText = isLand ? '#6ee7b7' : '#7dd3fc';
+
+      const label = `[Sector ${sec.id}] ${sec.name} • ${sec.type} ${sec.icon}`;
+      const textWidth = targetCtx.measureText(label).width;
+
+      targetCtx.fillStyle = tagBg;
+      targetCtx.strokeStyle = tagBorder;
+      targetCtx.lineWidth = 1;
+
+      targetCtx.beginPath();
+      targetCtx.roundRect(bx, by - 16, textWidth + 16, 22, 4);
+      targetCtx.fill();
+      targetCtx.stroke();
+
+      targetCtx.fillStyle = tagText;
+      targetCtx.fillText(label, bx + 8, by);
+    }
+
+    targetCtx.restore();
+  }
+
+  /**
+   * Optional Grid Lines Debug Overlay
+   */
+  function renderGridOverlay(targetCtx) {
+    targetCtx.save();
+    targetCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    targetCtx.lineWidth = 1;
+    for (let c = 0; c <= GRID_COLS; c++) {
+      targetCtx.beginPath();
+      targetCtx.moveTo(c * TILE_SIZE, 0);
+      targetCtx.lineTo(c * TILE_SIZE, WORLD_HEIGHT);
+      targetCtx.stroke();
+    }
+    for (let r = 0; r <= GRID_ROWS; r++) {
+      targetCtx.beginPath();
+      targetCtx.moveTo(0, r * TILE_SIZE);
+      targetCtx.lineTo(WORLD_WIDTH, r * TILE_SIZE);
+      targetCtx.stroke();
+    }
+    targetCtx.restore();
+  }
+
+  // --- Substrate Coordinate Hover Inspector (HUD) ---
+  const canvasWrapper = document.getElementById('canvas-wrapper');
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const wx = Math.round((e.clientX - rect.left) * scaleX);
+    const wy = Math.round((e.clientY - rect.top) * scaleY);
+
+    if (wx < 0 || wx >= WORLD_WIDTH || wy < 0 || wy >= WORLD_HEIGHT) return;
+
+    const elev = getElevation(wx, wy);
+
+    const sec = getSectorAt(wx, wy);
+    document.getElementById('insp-pos').innerText = `X: ${wx}, Y: ${wy} [Sector ${sec.id}: ${sec.name} • ${sec.type} ${sec.icon}]`;
+
+    const rInfo = getRiverInfo(wx, wy);
+    const isBridge = Math.hypot(wx - 920, wy - 450) < 36;
+
+    let elevDesc = `${elev.toFixed(2)} (Inland Plateau)`;
+    if (rInfo && rInfo.inWater) elevDesc = `${elev.toFixed(2)} (Riverbed Channel)`;
+    else if (rInfo && rInfo.bank) elevDesc = `${elev.toFixed(2)} (Riverbank Slope)`;
+    else if (elev < ELEV_DEEP_WATER) elevDesc = `${elev.toFixed(2)} (Deep Ocean Basin)`;
+    else if (elev < ELEV_SHALLOW_WATER) elevDesc = `${elev.toFixed(2)} (Shallow Coastal Water)`;
+    else if (elev < ELEV_SAND_EXTENT) elevDesc = `${elev.toFixed(2)} (Dry Beach Sand)`;
+    document.getElementById('insp-elev').innerText = elevDesc;
+
+    // L1 Bedrock
+    if (config.layers.l1) {
+      const bx = Math.max(0, Math.min(BEDROCK_COLS - 1, Math.floor(wx / BEDROCK_BLOCK)));
+      const by = Math.max(0, Math.min(BEDROCK_ROWS - 1, Math.floor(wy / BEDROCK_BLOCK)));
+      const v = bedrockVoxels[by * BEDROCK_COLS + bx];
+      if ((v & VOXEL_FLAG_CORE) !== 0) {
+        document.getElementById('insp-l1').innerText = 'Abyss Chasm (#05080c)';
+      } else if ((v & VOXEL_FLAG_FISSURE) !== 0) {
+        document.getElementById('insp-l1').innerText = 'Tectonic Fault Chasm';
+      } else if ((v & VOXEL_FLAG_LIP) !== 0) {
+        document.getElementById('insp-l1').innerText = 'Basalt Chasm Lip (1px Raised)';
+      } else {
+        const strata = ['Abyss Trench', 'Oceanic Basalt', 'Continental Slate', 'Sub-terrene Granite'];
+        document.getElementById('insp-l1').innerText = (strata[v & 3] || 'Basalt') + ' Rock';
+      }
+    } else {
+      document.getElementById('insp-l1').innerText = '[Layer Hidden]';
+    }
+
+    // L2 Topsoil, Earth & Beach Sand (Continental Mantle)
+    let soilTxt = 'None (Deep Ocean Floor)';
+    if (config.layers.l2) {
+      const bx = Math.max(0, Math.min(BEDROCK_COLS - 1, Math.floor(wx / BEDROCK_BLOCK)));
+      const by = Math.max(0, Math.min(BEDROCK_ROWS - 1, Math.floor(wy / BEDROCK_BLOCK)));
+      const v = bedrockVoxels[by * BEDROCK_COLS + bx];
+
+      if (isBridge) {
+        soilTxt = 'Wooden River Bridge Structure 🪵';
+      } else if (rInfo && rInfo.inWater) {
+        soilTxt = 'Riverbed Silt & Pebbles (Flowing Stream 🏞️)';
+      } else if (rInfo && rInfo.bank) {
+        soilTxt = 'Moist Riverbank Loam & Stones 🌾';
+      } else if ((v & VOXEL_FLAG_FISSURE) !== 0 && elev < ELEV_DEEP_WATER) {
+        soilTxt = 'Torn Open (Abyss Rift Chasm)';
+      } else if ((v & VOXEL_FLAG_LIP) !== 0 && elev < ELEV_SHALLOW_WATER) {
+        soilTxt = 'Basalt Lip Rim (Exposed)';
+      } else if (elev < ELEV_DEEP_WATER) {
+        soilTxt = 'Oceanic Abyss Bedrock (No Soil)';
+      } else if (elev < ELEV_SHALLOW_WATER) {
+        soilTxt = 'Submerged Sand Shelf (Under Shallows)';
+      } else if (elev <= ELEV_SAND_EXTENT + 0.03) {
+        soilTxt = 'Coastal Beach Sand Dunes';
+      } else {
+        soilTxt = 'Rich Continental Loam / Topsoil';
+      }
+    } else {
+      soilTxt = '[Layer Hidden]';
+    }
+    document.getElementById('insp-l2').innerText = soilTxt;
+
+    // L3 Biome / Grass Field (Temporarily Cleared)
+    let grassTxt = 'Cleared / Empty (Substrate Verification)';
+    if (!config.layers.l3) {
+      grassTxt = '[Layer Hidden]';
+    }
+    document.getElementById('insp-l3').innerText = grassTxt;
+
+    // L4 Water
+    let waterTxt = 'Dry Ground';
+    if (config.layers.l4) {
+      if (rInfo && rInfo.inWater) waterTxt = `Flowing River Stream (Directional Flow)`;
+      else if (elev < ELEV_DEEP_WATER) waterTxt = `Deep Ocean (Alpha ${config.water.deepAlpha})`;
+      else if (elev < ELEV_SHALLOW_WATER) waterTxt = `Shallow Wave (Alpha ${config.water.shallowAlpha})`;
+    } else {
+      waterTxt = '[Layer Hidden]';
+    }
+    document.getElementById('insp-l4').innerText = waterTxt;
+
+    // L5 Entities
+    let hitEntity = 'None';
+    if (config.layers.l5) {
+      for (const ent of entities) {
+        if (Math.abs(wx - ent.x) < 40 && Math.abs(wy - ent.y) < 40) {
+          hitEntity = `${ent.asset.toUpperCase()} (#${ent.id})`;
+          break;
+        }
+      }
+    } else {
+      hitEntity = '[Layer Hidden]';
+    }
+    document.getElementById('insp-l5').innerText = hitEntity;
+  });
+
+  // --- UI Event Handlers & Layer Inspector Wiring ---
+
+  // Checkbox toggles for each layer
+  ['l1', 'l2', 'l3', 'l4', 'l5'].forEach(layerKey => {
+    const chk = document.getElementById(`chk-${layerKey}`);
+    const card = document.getElementById(`card-${layerKey}`);
+
+    chk.addEventListener('change', (e) => {
+      config.layers[layerKey] = e.target.checked;
+      card.classList.toggle('disabled', !e.target.checked);
+      if (currentSoloLayer) resetSoloButtons();
+    });
+  });
+
+  // Solo buttons
+  const soloButtons = document.querySelectorAll('.btn-solo[data-layer]');
+  soloButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const targetLayer = btn.getAttribute('data-layer');
+
+      if (currentSoloLayer === targetLayer) {
+        // Un-solo: restore all
+        ['l1', 'l2', 'l3', 'l4', 'l5'].forEach(lk => {
+          config.layers[lk] = true;
+          document.getElementById(`chk-${lk}`).checked = true;
+          document.getElementById(`card-${lk}`).classList.remove('disabled');
+        });
+        resetSoloButtons();
+        currentSoloLayer = null;
+        showToast('Restored all substrate layers');
+      } else {
+        // Solo this layer
+        currentSoloLayer = targetLayer;
+        ['l1', 'l2', 'l3', 'l4', 'l5'].forEach(lk => {
+          const isTarget = lk === targetLayer;
+          config.layers[lk] = isTarget;
+          document.getElementById(`chk-${lk}`).checked = isTarget;
+          document.getElementById(`card-${lk}`).classList.toggle('disabled', !isTarget);
+        });
+        resetSoloButtons();
+        btn.classList.add('active');
+        showToast(`Soloing [${targetLayer.toUpperCase()}]`);
+      }
+    });
+  });
+
+  function resetSoloButtons() {
+    soloButtons.forEach(b => b.classList.remove('active'));
+  }
+
+  // Master Presets
+  document.getElementById('preset-all').addEventListener('click', () => {
+    ['l1', 'l2', 'l3', 'l4', 'l5'].forEach(lk => {
+      config.layers[lk] = true;
+      document.getElementById(`chk-${lk}`).checked = true;
+      document.getElementById(`card-${lk}`).classList.remove('disabled');
+    });
+    resetSoloButtons();
+    currentSoloLayer = null;
+    showToast('Preset: All 5 Layers On');
+  });
+
+  document.getElementById('preset-substr-only').addEventListener('click', () => {
+    ['l1', 'l2', 'l3', 'l4'].forEach(lk => {
+      config.layers[lk] = true;
+      document.getElementById(`chk-${lk}`).checked = true;
+      document.getElementById(`card-${lk}`).classList.remove('disabled');
+    });
+    config.layers.l5 = false;
+    document.getElementById('chk-l5').checked = false;
+    document.getElementById('card-l5').classList.add('disabled');
+    resetSoloButtons();
+    currentSoloLayer = null;
+    showToast('Preset: Substrate Only (No Props)');
+  });
+
+  document.getElementById('preset-xray-water').addEventListener('click', () => {
+    // Hide water (L4) so submerged sand and bedrock are totally visible!
+    config.layers.l1 = true;
+    config.layers.l2 = true;
+    config.layers.l3 = true;
+    config.layers.l4 = false;
+    config.layers.l5 = true;
+
+    ['l1', 'l2', 'l3', 'l5'].forEach(lk => {
+      document.getElementById(`chk-${lk}`).checked = true;
+      document.getElementById(`card-${lk}`).classList.remove('disabled');
+    });
+    document.getElementById('chk-l4').checked = false;
+    document.getElementById('card-l4').classList.add('disabled');
+
+    resetSoloButtons();
+    currentSoloLayer = null;
+    showToast('X-Ray Water: Submerged sand exposed!');
+  });
+
+  document.getElementById('preset-bedrock-only').addEventListener('click', () => {
+    ['l2', 'l3', 'l4', 'l5'].forEach(lk => {
+      config.layers[lk] = false;
+      document.getElementById(`chk-${lk}`).checked = false;
+      document.getElementById(`card-${lk}`).classList.add('disabled');
+    });
+    config.layers.l1 = true;
+    document.getElementById('chk-l1').checked = true;
+    document.getElementById('card-l1').classList.remove('disabled');
+    resetSoloButtons();
+    currentSoloLayer = null;
+    showToast('Preset: Bedrock Base Only');
+  });
+
+  // Simulation Sliders
+  function bindSlider(id, targetObj, key, valId, suffix = '', multiplier = 1, onInputCallback = null) {
+    const slider = document.getElementById(id);
+    const label = document.getElementById(valId);
+    slider.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      targetObj[key] = val * multiplier;
+      label.innerText = val.toFixed(2) + suffix;
+      if (onInputCallback) onInputCallback();
+    });
+  }
+
+  bindSlider('rng-shallow-alpha', config.water, 'shallowAlpha', 'val-shallow-alpha', '', 1, () => bakeWaterBathymetry());
+  bindSlider('rng-deep-alpha', config.water, 'deepAlpha', 'val-deep-alpha', '', 1, () => bakeWaterBathymetry());
+  bindSlider('rng-water-speed', config.water, 'waterSpeed', 'val-water-speed', 'x');
+
+  // Procedural Noise Sliders
+  document.getElementById('rng-noise-freq').addEventListener('input', (e) => {
+    config.noise.freq = parseFloat(e.target.value);
+    document.getElementById('val-noise-freq').innerText = config.noise.freq.toFixed(4);
+  });
+
+  document.getElementById('rng-island-rad').addEventListener('input', (e) => {
+    config.noise.islandRadius = parseFloat(e.target.value);
+    document.getElementById('val-island-rad').innerText = Math.round(config.noise.islandRadius) + ' px';
+  });
+
+  document.getElementById('btn-rebake-all').addEventListener('click', () => {
+    bakeStaticLayers();
+  });
+
+  document.getElementById('btn-random-seed').addEventListener('click', () => {
+    config.noise.seed = Math.floor(Math.random() * 100000);
+    simplex = new SimplexNoise(config.noise.seed);
+    bakeStaticLayers();
+    showToast(`New continental coast generated (Seed: ${config.noise.seed})`);
+  });
+
+  // 3x3 Sectors Debug Checkbox
+  document.getElementById('chk-sectors').addEventListener('change', (e) => {
+    config.debug.showSectors = e.target.checked;
+  });
+
+  // Grid Debug Checkbox
+  document.getElementById('chk-grid').addEventListener('change', (e) => {
+    config.debug.showGrid = e.target.checked;
+  });
+
+  // Viewport Zoom & Camera Controls
+  const btnZoomFit = document.getElementById('btn-zoom-fit');
+  const btnZoom1x = document.getElementById('btn-zoom-1x');
+  const btnZoom15x = document.getElementById('btn-zoom-15x');
+  const btnCenterPlayer = document.getElementById('btn-center-player');
+
+  function setZoom(zoomFactor, activeBtn) {
+    config.camera.zoom = zoomFactor;
+    canvas.style.transform = `scale(${zoomFactor})`;
+    [btnZoomFit, btnZoom1x, btnZoom15x].forEach(b => b.classList.remove('active'));
+    if (activeBtn) activeBtn.classList.add('active');
+  }
+
+  btnZoomFit.addEventListener('click', () => {
+    const wrapper = document.getElementById('canvas-wrapper');
+    const scale = Math.min((wrapper.clientWidth - 48) / WORLD_WIDTH, (wrapper.clientHeight - 48) / WORLD_HEIGHT);
+    setZoom(Math.max(0.3, scale), btnZoomFit);
+  });
+
+  btnZoom1x.addEventListener('click', () => setZoom(1.0, btnZoom1x));
+  btnZoom15x.addEventListener('click', () => setZoom(1.5, btnZoom15x));
+
+  btnCenterPlayer.addEventListener('click', () => {
+    const wrapper = document.getElementById('canvas-wrapper');
+    const targetScrollX = (player.x * config.camera.zoom) - (wrapper.clientWidth / 2);
+    const targetScrollY = (player.y * config.camera.zoom) - (wrapper.clientHeight / 2);
+    wrapper.scrollTo({ left: targetScrollX, top: targetScrollY, behavior: 'smooth' });
+    showToast('Centered camera on player');
+  });
+
+  // Toast Notification
+  let toastTimer = null;
+  function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.innerText = msg;
+    toast.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toast.classList.remove('show');
+    }, 2200);
+  }
+
+  // Initial Startup Execution
+  bakeStaticLayers();
+  requestAnimationFrame(renderFrame);
+
+  // Initial camera scroll to player
+  setTimeout(() => {
+    const wrapper = document.getElementById('canvas-wrapper');
+    wrapper.scrollLeft = (player.x) - (wrapper.clientWidth / 2);
+    wrapper.scrollTop = (player.y) - (wrapper.clientHeight / 2);
+  }, 100);
+
+  </script>
+</body>
+</html>
