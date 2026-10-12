@@ -343,6 +343,10 @@
           <input type="checkbox" id="chk-collision" checked>
           <span>Solid Obstacle Collision</span>
         </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-water-solid" checked>
+          <span>Water Impassable (Solid)</span>
+        </label>
       </div>
 
       <div style="margin-top: 14px;">
@@ -352,6 +356,25 @@
           <button id="zoom-2x">2x Scale</button>
           <button id="btn-reset-pos">Reset Positions</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Terrain & Map Painter -->
+    <div class="section">
+      <div class="section-title">Terrain & Map Painter</div>
+      <label>Paint Brush</label>
+      <div class="btn-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+        <button id="brush-none" class="active">Play Mode</button>
+        <button id="brush-grass">🌿 Grass</button>
+        <button id="brush-dirt">🪨 Dirt Path</button>
+        <button id="brush-sand">🏖️ Sand Beach</button>
+        <button id="brush-water" style="grid-column: span 2;">🌊 Water</button>
+      </div>
+      <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px; line-height: 1.4;">
+        Select a brush, then click or drag across the grid to paint terrain in real time.
+      </div>
+      <div class="btn-group" style="margin-top: 8px;">
+        <button id="btn-reset-terrain" style="width: 100%;">Reset Default Terrain</button>
       </div>
     </div>
 
@@ -439,7 +462,197 @@
       hitbox: true,
       anchor: true,
       bounds: true,
-      collision: true
+      collision: true,
+      waterSolid: true
+    };
+
+    // Terrain Constants & Default Map
+    const TERRAIN_GRASS = 0;
+    const TERRAIN_DIRT = 1;
+    const TERRAIN_WATER = 2;
+    const TERRAIN_SAND = 3;
+
+    const DEFAULT_TERRAIN_MAP = [
+      // 0: Grass, 1: Dirt, 2: Water, 3: Sand Beach
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 2, 2, 2], // Row 0
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 2, 2, 2], // Row 1
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 2, 2, 2, 2], // Row 2 (Fisher's House at 2,2)
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 2, 2, 2, 2], // Row 3
+      [0, 0, 1, 1, 1, 1, 1, 0, 0, 3, 3, 2, 2, 2, 2], // Row 4 (Path from house, near Palm Tree at 7,4)
+      [0, 0, 0, 0, 0, 1, 1, 0, 0, 3, 3, 2, 2, 2, 2], // Row 5
+      [0, 0, 0, 0, 0, 0, 1, 1, 0, 3, 3, 2, 2, 2, 2], // Row 6 (Barrel at 5,6, Player start at 7,6)
+      [0, 0, 0, 0, 0, 0, 1, 1, 0, 3, 3, 2, 2, 2, 2], // Row 7
+      [0, 0, 0, 0, 0, 0, 1, 1, 1, 3, 3, 2, 2, 2, 2], // Row 8 (River Rat at 7,8)
+      [0, 0, 0, 0, 0, 0, 0, 1, 1, 3, 3, 2, 2, 2, 2], // Row 9
+      [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 3, 3, 2, 2, 2], // Row 10 (Trail meets sand beach)
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, 3, 2, 2, 2]  // Row 11
+    ];
+
+    let terrainMap = DEFAULT_TERRAIN_MAP.map(r => [...r]);
+
+    function resetTerrainMap() {
+      terrainMap = DEFAULT_TERRAIN_MAP.map(r => [...r]);
+    }
+
+    // Procedural Tile Texture Generation
+    function makePrng(seed) {
+      let s = seed;
+      return () => {
+        s = (s * 9301 + 49297) % 233280;
+        return s / 233280;
+      };
+    }
+
+    function createOffscreenTile(drawFn) {
+      const oc = document.createElement('canvas');
+      oc.width = TILE_SIZE;
+      oc.height = TILE_SIZE;
+      const octx = oc.getContext('2d');
+      drawFn(octx);
+      return oc;
+    }
+
+    const tileCanvases = {
+      grass: [
+        // Variant 0: Standard meadow
+        createOffscreenTile(c => {
+          const rand = makePrng(101);
+          c.fillStyle = '#2d5e38';
+          c.fillRect(0, 0, 64, 64);
+          for (let i = 0; i < 90; i++) {
+            const px = Math.floor(rand() * 64);
+            const py = Math.floor(rand() * 64);
+            c.fillStyle = rand() > 0.5 ? '#244d2e' : '#377345';
+            c.fillRect(px, py, 1, 1);
+          }
+          for (let i = 0; i < 7; i++) {
+            const bx = Math.floor(rand() * 56) + 4;
+            const by = Math.floor(rand() * 56) + 4;
+            c.fillStyle = '#469156';
+            c.fillRect(bx, by, 1, 2);
+            c.fillRect(bx + 1, by - 1, 1, 3);
+            c.fillRect(bx + 2, by, 1, 2);
+          }
+        }),
+        // Variant 1: Lush with tiny wildflowers
+        createOffscreenTile(c => {
+          const rand = makePrng(202);
+          c.fillStyle = '#2b5a36';
+          c.fillRect(0, 0, 64, 64);
+          for (let i = 0; i < 90; i++) {
+            const px = Math.floor(rand() * 64);
+            const py = Math.floor(rand() * 64);
+            c.fillStyle = rand() > 0.5 ? '#22472b' : '#397848';
+            c.fillRect(px, py, 1, 1);
+          }
+          for (let i = 0; i < 8; i++) {
+            const bx = Math.floor(rand() * 56) + 4;
+            const by = Math.floor(rand() * 56) + 4;
+            c.fillStyle = '#489458';
+            c.fillRect(bx, by, 1, 2);
+            c.fillRect(bx + 1, by - 1, 1, 3);
+          }
+          c.fillStyle = '#fef08a'; // Buttercup
+          c.fillRect(18, 22, 2, 2);
+          c.fillStyle = '#ffffff'; // Daisy
+          c.fillRect(44, 38, 2, 2);
+        }),
+        // Variant 2: Dense blade patches
+        createOffscreenTile(c => {
+          const rand = makePrng(303);
+          c.fillStyle = '#2f633b';
+          c.fillRect(0, 0, 64, 64);
+          for (let i = 0; i < 95; i++) {
+            const px = Math.floor(rand() * 64);
+            const py = Math.floor(rand() * 64);
+            c.fillStyle = rand() > 0.5 ? '#244d2e' : '#3b7d4a';
+            c.fillRect(px, py, 1, 1);
+          }
+          for (let i = 0; i < 9; i++) {
+            const bx = Math.floor(rand() * 56) + 4;
+            const by = Math.floor(rand() * 56) + 4;
+            c.fillStyle = '#4ea05f';
+            c.fillRect(bx, by, 1, 3);
+            c.fillRect(bx + 1, by + 1, 1, 2);
+          }
+        })
+      ],
+      dirt: [
+        // Variant 0: Fine packed earth
+        createOffscreenTile(c => {
+          const rand = makePrng(404);
+          c.fillStyle = '#735137';
+          c.fillRect(0, 0, 64, 64);
+          for (let i = 0; i < 110; i++) {
+            const px = Math.floor(rand() * 64);
+            const py = Math.floor(rand() * 64);
+            c.fillStyle = rand() > 0.5 ? '#5b3f2a' : '#8a6345';
+            c.fillRect(px, py, 1, 1);
+          }
+          for (let i = 0; i < 4; i++) {
+            const pbx = Math.floor(rand() * 54) + 4;
+            const pby = Math.floor(rand() * 54) + 4;
+            c.fillStyle = '#483120';
+            c.fillRect(pbx, pby, 2, 2);
+            c.fillStyle = '#9e7352';
+            c.fillRect(pbx, pby - 1, 2, 1);
+          }
+        }),
+        // Variant 1: Trail path with central wear
+        createOffscreenTile(c => {
+          const rand = makePrng(505);
+          c.fillStyle = '#6e4c33';
+          c.fillRect(0, 0, 64, 64);
+          c.fillStyle = 'rgba(74, 50, 33, 0.4)';
+          c.fillRect(16, 0, 32, 64);
+          for (let i = 0; i < 110; i++) {
+            const px = Math.floor(rand() * 64);
+            const py = Math.floor(rand() * 64);
+            c.fillStyle = rand() > 0.5 ? '#583c27' : '#886142';
+            c.fillRect(px, py, 1, 1);
+          }
+          for (let i = 0; i < 5; i++) {
+            const pbx = Math.floor(rand() * 54) + 4;
+            const pby = Math.floor(rand() * 54) + 4;
+            c.fillStyle = '#47301f';
+            c.fillRect(pbx, pby, 2, 2);
+          }
+        })
+      ],
+      sand: [
+        // Variant 0: Golden beach sand with granular specks
+        createOffscreenTile(c => {
+          const rand = makePrng(606);
+          c.fillStyle = '#d4a373';
+          c.fillRect(0, 0, 64, 64);
+          for (let i = 0; i < 125; i++) {
+            const px = Math.floor(rand() * 64);
+            const py = Math.floor(rand() * 64);
+            c.fillStyle = rand() > 0.5 ? '#be8c5c' : '#e6be8b';
+            c.fillRect(px, py, 1, 1);
+          }
+          // Tiny seashell flecks
+          c.fillStyle = '#fff4e6';
+          c.fillRect(22, 34, 2, 1);
+          c.fillRect(48, 16, 1, 2);
+        }),
+        // Variant 1: Shoreline sand with gentle drift grain
+        createOffscreenTile(c => {
+          const rand = makePrng(707);
+          c.fillStyle = '#d19e6d';
+          c.fillRect(0, 0, 64, 64);
+          for (let i = 0; i < 125; i++) {
+            const px = Math.floor(rand() * 64);
+            const py = Math.floor(rand() * 64);
+            c.fillStyle = rand() > 0.5 ? '#ba8856' : '#e4bb87';
+            c.fillRect(px, py, 1, 1);
+          }
+          c.fillStyle = 'rgba(182, 132, 82, 0.35)';
+          c.fillRect(0, 26, 64, 2);
+          c.fillStyle = '#fff9f0';
+          c.fillRect(38, 46, 2, 1);
+        })
+      ]
     };
 
     // Asset Manager & Image Preloader
@@ -571,7 +784,11 @@
         asset: 'river-rat',
         animTime: 0,
         fps: 8,
-        dir: DIR_UP, // Facing back towards the player
+        dir: DIR_DOWN,
+        speed: 68,
+        wanderState: 'idle_center', // 'idle_center', 'look_right', 'look_left', 'walking'
+        stateTimer: 1.2,
+        isMoving: false,
         frameWidth: 128,
         frameHeight: 128,
         renderWidth: 128,
@@ -627,6 +844,23 @@
           return true;
         }
       }
+
+      // Water collision if enabled
+      if (debug.waterSolid) {
+        const minTx = Math.max(0, Math.floor(box.left / TILE_SIZE));
+        const maxTx = Math.min(GRID_COLS - 1, Math.floor(box.right / TILE_SIZE));
+        const minTy = Math.max(0, Math.floor(box.top / TILE_SIZE));
+        const maxTy = Math.min(GRID_ROWS - 1, Math.floor(box.bottom / TILE_SIZE));
+
+        for (let ty = minTy; ty <= maxTy; ty++) {
+          for (let tx = minTx; tx <= maxTx; tx++) {
+            if (terrainMap[ty][tx] === TERRAIN_WATER) {
+              return true;
+            }
+          }
+        }
+      }
+
       return false;
     }
 
@@ -672,21 +906,184 @@
       }
     }
 
-    // Render floor grid
-    function renderGroundGrid() {
+    // Helper to get Rat turn head angles from Row 4 (Still views)
+    function getRatLookFrame(dir, side) {
+      // Row 4 turntable angles: 0: 30°, 1: 60°, 2: 120°, 3: 150°, 4: 210°, 5: 240°, 6: 300°, 7: 330°
+      if (dir === DIR_DOWN) return side === 'right' ? { col: 0, row: 4 } : { col: 7, row: 4 };
+      if (dir === DIR_RIGHT) return side === 'right' ? { col: 2, row: 4 } : { col: 1, row: 4 };
+      if (dir === DIR_UP) return side === 'right' ? { col: 4, row: 4 } : { col: 3, row: 4 };
+      if (dir === DIR_LEFT) return side === 'right' ? { col: 6, row: 4 } : { col: 5, row: 4 };
+      return { col: 0, row: 4 };
+    }
+
+    // River Rat NPC wandering state machine
+    function updateRiverRatNPC(dt) {
+      const rat = entities.find(e => e.id === 'river-rat-npc');
+      if (!rat) return;
+
+      rat.stateTimer -= dt;
+
+      if (rat.wanderState === 'walking') {
+        rat.isMoving = true;
+        rat.animTime += dt;
+
+        let vx = 0, vy = 0;
+        if (rat.dir === DIR_DOWN) vy = 1;
+        else if (rat.dir === DIR_UP) vy = -1;
+        else if (rat.dir === DIR_RIGHT) vx = 1;
+        else if (rat.dir === DIR_LEFT) vx = -1;
+
+        const moveDist = rat.speed * dt;
+        const nextX = rat.x + vx * moveDist;
+        const nextY = rat.y + vy * moveDist;
+
+        if (!checkCollision(nextX, nextY, rat.width, rat.height)) {
+          rat.x = nextX;
+          rat.y = nextY;
+        } else {
+          // Bumping an obstacle stops walking early
+          rat.stateTimer = 0;
+        }
+
+        if (rat.stateTimer <= 0) {
+          rat.isMoving = false;
+          rat.animTime = 0;
+          rat.wanderState = 'idle_center';
+          rat.stateTimer = 0.9 + Math.random() * 0.8; // Pause briefly
+        }
+      } else if (rat.wanderState === 'idle_center') {
+        rat.isMoving = false;
+        if (rat.stateTimer <= 0) {
+          // Turn head to one side
+          rat.wanderState = Math.random() < 0.5 ? 'look_right' : 'look_left';
+          rat.stateTimer = 0.7 + Math.random() * 0.5;
+        }
+      } else if (rat.wanderState === 'look_right') {
+        rat.isMoving = false;
+        if (rat.stateTimer <= 0) {
+          // Turn head to the opposite side
+          rat.wanderState = 'look_left';
+          rat.stateTimer = 0.7 + Math.random() * 0.5;
+        }
+      } else if (rat.wanderState === 'look_left') {
+        rat.isMoving = false;
+        if (rat.stateTimer <= 0) {
+          // Pick a new open direction and walk a few steps
+          const candidates = [DIR_DOWN, DIR_RIGHT, DIR_UP, DIR_LEFT];
+          candidates.sort(() => Math.random() - 0.5);
+
+          let chosenDir = candidates[0];
+          for (const d of candidates) {
+            let tvx = 0, tvy = 0;
+            if (d === DIR_DOWN) tvy = 1;
+            else if (d === DIR_UP) tvy = -1;
+            else if (d === DIR_RIGHT) tvx = 1;
+            else if (d === DIR_LEFT) tvx = -1;
+
+            if (!checkCollision(rat.x + tvx * 32, rat.y + tvy * 32, rat.width, rat.height)) {
+              chosenDir = d;
+              break;
+            }
+          }
+
+          rat.dir = chosenDir;
+          rat.wanderState = 'walking';
+          rat.stateTimer = 1.2 + Math.random() * 1.5; // Walk for 1.2 - 2.7s
+        }
+      }
+    }
+
+    // Render floor grid with procedural terrain, grass gradients, and animated water
+    function renderGroundGrid(now) {
+      const timeSec = (now || 0) * 0.001;
+
       for (let r = 0; r < GRID_ROWS; r++) {
         for (let c = 0; c < GRID_COLS; c++) {
           const gx = c * TILE_SIZE;
           const gy = r * TILE_SIZE;
+          const type = terrainMap[r][c];
 
-          // Alternating subtle checkerboard
-          const isEven = (c + r) % 2 === 0;
-          ctx.fillStyle = isEven ? '#242830' : '#1c1f24';
-          ctx.fillRect(gx, gy, TILE_SIZE, TILE_SIZE);
+          if (type === TERRAIN_GRASS) {
+            const variant = (c * 7 + r * 13) % 3;
+            ctx.drawImage(tileCanvases.grass[variant], gx, gy);
 
-          // Grid lines
+            // --- Grass Gradient Logic ---
+            // 1. Linear gradient at 30 degrees (pointing from inland top-left toward beach bottom-right)
+            const px = gx + 32;
+            const py = gy + 32;
+            const cos30 = 0.866025; // cos(30 deg)
+            const sin30 = 0.5;      // sin(30 deg)
+            const proj30 = px * cos30 + py * sin30;
+            const tLinear1 = Math.min(1, Math.max(0, proj30 / 1150));
+
+            // Secondary subtle wave variation along 30 deg axis
+            const tLinear2 = Math.sin(proj30 * 0.008) * 0.05;
+
+            // 2. Large radial gradient (inland forest core at x:180, y:340, radius:750)
+            const distInland = Math.hypot(px - 180, py - 340) / 750;
+            const tRadial = Math.min(1, Math.max(0, distInland));
+
+            // Combined coastal proximity factor (0 = deep inland, 1 = near beach/water)
+            const coastalFactor = Math.min(1, Math.max(0, tLinear1 * 0.70 + tRadial * 0.30 + tLinear2));
+
+            // Apply gradient tints:
+            if (coastalFactor < 0.48) {
+              // Deep inland: rich, deep emerald forest shade
+              const inlandIntensity = (0.48 - coastalFactor) * 0.55;
+              ctx.fillStyle = `rgba(16, 56, 26, ${inlandIntensity})`;
+              ctx.fillRect(gx, gy, TILE_SIZE, TILE_SIZE);
+            }
+            if (coastalFactor > 0.32) {
+              // Coastal / near beach: lighter, sun-warmed yellow-lime tint
+              const coastalIntensity = (coastalFactor - 0.32) * 0.42;
+              ctx.fillStyle = `rgba(215, 235, 105, ${coastalIntensity})`;
+              ctx.fillRect(gx, gy, TILE_SIZE, TILE_SIZE);
+            }
+          } else if (type === TERRAIN_DIRT) {
+            const variant = (c * 5 + r * 11) % 2;
+            ctx.drawImage(tileCanvases.dirt[variant], gx, gy);
+          } else if (type === TERRAIN_SAND) {
+            const variant = (c * 3 + r * 7) % 2;
+            ctx.drawImage(tileCanvases.sand[variant], gx, gy);
+          } else if (type === TERRAIN_WATER) {
+            // Deep ocean/river base
+            ctx.fillStyle = '#1e3a8a';
+            ctx.fillRect(gx, gy, TILE_SIZE, TILE_SIZE);
+
+            // Animated wave currents
+            ctx.fillStyle = '#2563eb';
+            const waveY1 = gy + 14 + Math.sin(timeSec * 2.8 + c * 0.7 + r * 0.4) * 3;
+            const waveY2 = gy + 38 + Math.sin(timeSec * 2.8 + c * 0.7 + r * 0.4 + 2.1) * 3;
+            ctx.fillRect(gx + 4, waveY1, 26, 2.5);
+            ctx.fillRect(gx + 32, waveY2, 24, 2.5);
+
+            // Glistening specular highlights
+            ctx.fillStyle = 'rgba(219, 234, 254, 0.55)';
+            ctx.fillRect(gx + 10, waveY1 + 1, 14, 1.5);
+            ctx.fillRect(gx + 38, waveY2 + 1, 12, 1.5);
+
+            // Shoreline transitions if adjacent to land
+            const isWestLand = c > 0 && terrainMap[r][c - 1] !== TERRAIN_WATER;
+            const isEastLand = c < GRID_COLS - 1 && terrainMap[r][c + 1] !== TERRAIN_WATER;
+            const isNorthLand = r > 0 && terrainMap[r - 1][c] !== TERRAIN_WATER;
+            const isSouthLand = r < GRID_ROWS - 1 && terrainMap[r + 1][c] !== TERRAIN_WATER;
+
+            ctx.fillStyle = 'rgba(254, 240, 138, 0.45)'; // Sandy rim
+            if (isWestLand) ctx.fillRect(gx, gy, 3, TILE_SIZE);
+            if (isEastLand) ctx.fillRect(gx + TILE_SIZE - 3, gy, 3, TILE_SIZE);
+            if (isNorthLand) ctx.fillRect(gx, gy, TILE_SIZE, 3);
+            if (isSouthLand) ctx.fillRect(gx, gy + TILE_SIZE - 3, TILE_SIZE, 3);
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; // Foam edge
+            if (isWestLand) ctx.fillRect(gx + 3, gy, 2, TILE_SIZE);
+            if (isEastLand) ctx.fillRect(gx + TILE_SIZE - 5, gy, 2, TILE_SIZE);
+            if (isNorthLand) ctx.fillRect(gx, gy + 3, TILE_SIZE, 2);
+            if (isSouthLand) ctx.fillRect(gx, gy + TILE_SIZE - 5, TILE_SIZE, 2);
+          }
+
+          // Grid lines overlay
           if (debug.grid) {
-            ctx.strokeStyle = '#2f3540';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
             ctx.lineWidth = 1;
             ctx.strokeRect(gx + 0.5, gy + 0.5, TILE_SIZE, TILE_SIZE);
           }
@@ -716,20 +1113,14 @@
 
       // Update positions
       updatePlayer(dt);
-
-      // Update NPC animation timer
-      for (const ent of entities) {
-        if (ent.type === 'npc') {
-          ent.animTime = (ent.animTime || 0) + dt;
-        }
-      }
+      updateRiverRatNPC(dt);
 
       // Clear canvas
       ctx.imageSmoothingEnabled = false;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // 1. Draw Background Ground Tiles
-      renderGroundGrid();
+      renderGroundGrid(now);
 
       // 2. Gather All Renderable Entities for Depth Sorting
       const renderList = [];
@@ -800,9 +1191,29 @@
       let srcY = ent.frameY || 0;
 
       if (ent.type === 'npc') {
-        const frameIndex = Math.floor(ent.animTime * (ent.fps || 8)) % 8;
-        srcX = frameIndex * fw;
-        srcY = ent.dir * fh;
+        if (ent.id === 'river-rat-npc') {
+          if (ent.wanderState === 'walking') {
+            const frameIndex = Math.floor(ent.animTime * (ent.fps || 8)) % 8;
+            srcX = frameIndex * fw;
+            srcY = ent.dir * fh;
+          } else if (ent.wanderState === 'look_right') {
+            const look = getRatLookFrame(ent.dir, 'right');
+            srcX = look.col * fw;
+            srcY = look.row * fh;
+          } else if (ent.wanderState === 'look_left') {
+            const look = getRatLookFrame(ent.dir, 'left');
+            srcX = look.col * fw;
+            srcY = look.row * fh;
+          } else {
+            // idle_center
+            srcX = 0;
+            srcY = ent.dir * fh;
+          }
+        } else {
+          const frameIndex = Math.floor(ent.animTime * (ent.fps || 8)) % 8;
+          srcX = frameIndex * fw;
+          srcY = ent.dir * fh;
+        }
       }
 
       // Draw sprite image or fallback placeholder
@@ -908,6 +1319,69 @@
     document.getElementById('chk-anchor').addEventListener('change', (e) => debug.anchor = e.target.checked);
     document.getElementById('chk-bounds').addEventListener('change', (e) => debug.bounds = e.target.checked);
     document.getElementById('chk-collision').addEventListener('change', (e) => debug.collision = e.target.checked);
+    document.getElementById('chk-water-solid').addEventListener('change', (e) => debug.waterSolid = e.target.checked);
+
+    // Terrain Painter Brush Controls
+    let activeBrush = null; // null = Play Mode, 0 = Grass, 1 = Dirt, 2 = Water, 3 = Sand
+    const brushButtons = {
+      none: document.getElementById('brush-none'),
+      grass: document.getElementById('brush-grass'),
+      dirt: document.getElementById('brush-dirt'),
+      sand: document.getElementById('brush-sand'),
+      water: document.getElementById('brush-water')
+    };
+
+    function setActiveBrush(brush, btnKey) {
+      activeBrush = brush;
+      Object.keys(brushButtons).forEach(k => {
+        brushButtons[k].classList.toggle('active', k === btnKey);
+      });
+      canvas.style.cursor = brush === null ? 'default' : 'crosshair';
+    }
+
+    brushButtons.none.addEventListener('click', () => setActiveBrush(null, 'none'));
+    brushButtons.grass.addEventListener('click', () => setActiveBrush(TERRAIN_GRASS, 'grass'));
+    brushButtons.dirt.addEventListener('click', () => setActiveBrush(TERRAIN_DIRT, 'dirt'));
+    brushButtons.sand.addEventListener('click', () => setActiveBrush(TERRAIN_SAND, 'sand'));
+    brushButtons.water.addEventListener('click', () => setActiveBrush(TERRAIN_WATER, 'water'));
+
+    document.getElementById('btn-reset-terrain').addEventListener('click', () => {
+      resetTerrainMap();
+    });
+
+    // Mouse painting on canvas
+    let isPainting = false;
+
+    function paintAtEvent(e) {
+      if (activeBrush === null) return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const canvasX = (e.clientX - rect.left) * scaleX;
+      const canvasY = (e.clientY - rect.top) * scaleY;
+      const tx = Math.floor(canvasX / TILE_SIZE);
+      const ty = Math.floor(canvasY / TILE_SIZE);
+      if (tx >= 0 && tx < GRID_COLS && ty >= 0 && ty < GRID_ROWS) {
+        terrainMap[ty][tx] = activeBrush;
+      }
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (activeBrush !== null) {
+        isPainting = true;
+        paintAtEvent(e);
+      }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (isPainting && activeBrush !== null) {
+        paintAtEvent(e);
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      isPainting = false;
+    });
 
     // Zoom controls
     const btnZoom1x = document.getElementById('zoom-1x');
@@ -929,6 +1403,17 @@
       player.x = 7 * TILE_SIZE;
       player.y = 6 * TILE_SIZE;
       player.dir = DIR_DOWN;
+
+      const rat = entities.find(e => e.id === 'river-rat-npc');
+      if (rat) {
+        rat.x = 7 * TILE_SIZE;
+        rat.y = 8 * TILE_SIZE;
+        rat.dir = DIR_DOWN;
+        rat.wanderState = 'idle_center';
+        rat.stateTimer = 1.0;
+        rat.isMoving = false;
+        rat.animTime = 0;
+      }
     });
 
     // Preset selection
