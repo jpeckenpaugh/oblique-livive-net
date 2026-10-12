@@ -596,7 +596,7 @@
             <span class="layer-color-tag" style="background: var(--layer-l1);"></span>
             <div>
               <div class="layer-title-text">[L1] Bedrock / Abyss Base</div>
-              <div class="layer-subtext">100% opaque universal floor (basalt rock & silt)</div>
+              <div class="layer-subtext">Flat typed voxel memory, direct 32-bit blit, 2x2 mineral grain & hydrothermal fissures</div>
             </div>
           </label>
           <div class="layer-actions">
@@ -1042,6 +1042,231 @@
   const ctxL3 = canvasL3.getContext('2d');
   const ctxL4_bathymetry = canvasL4_bathymetry.getContext('2d');
 
+  // =========================================================================
+  // LAYER 1 MEMORY MODEL & BEDROCK ARCHITECTURE (The Retro Voxel Soul)
+  // =========================================================================
+  // Flat typed memory buffer storing discrete geological strata for the entire world.
+  // Backed by 2x2 texel density to give late-90s physical pixel tooth without subpixel blur.
+  const BEDROCK_BLOCK = 2; // 2x2 retro texel density matching classic game sprite scale
+  const BEDROCK_COLS = WORLD_WIDTH / BEDROCK_BLOCK;   // 960
+  const BEDROCK_ROWS = WORLD_HEIGHT / BEDROCK_BLOCK; // 768
+
+  // Voxel classifications for discrete world memory
+  const VOXEL_ABYSS_TRENCH = 0;       // Oceanic deep trench & hydrothermal rifts (< 0.16)
+  const VOXEL_OCEANIC_BASALT = 1;     // Abyssal basalt sea floor (0.16 - 0.32)
+  const VOXEL_CONTINENTAL_SLATE = 2;  // Continental shelf & subsea rock slab (0.32 - 0.48)
+  const VOXEL_SUBTERRENE_GRANITE = 3; // Island bedrock foundation (>= 0.48)
+
+  const bedrockVoxels = new Uint8Array(BEDROCK_COLS * BEDROCK_ROWS);
+
+  /**
+   * Fast bitwise integer PRNG hash for discrete late-90s mineral grain tooth.
+   */
+  function hash2D(x, y, seed) {
+    let h = seed ^ (x * 374761393) ^ (y * 668265263);
+    h = (h ^ (h >> 13)) * 1274126177;
+    return (h ^ (h >> 16)) & 0xFF;
+  }
+
+  /**
+   * Packs 8-bit RGBA channels into a 32-bit little-endian integer (0xAABBGGRR).
+   */
+  function packABGR(r, g, b, a = 255) {
+    const cr = r < 0 ? 0 : (r > 255 ? 255 : r);
+    const cg = g < 0 ? 0 : (g > 255 ? 255 : g);
+    const cb = b < 0 ? 0 : (b > 255 ? 255 : b);
+    return ((a & 0xFF) << 24) | ((cb & 0xFF) << 16) | ((cg & 0xFF) << 8) | (cr & 0xFF);
+  }
+
+  // Shared pre-sampled elevation grid (BLOCK = 4)
+  const ELEV_GRID_BLOCK = 4;
+  const ELEV_GRID_COLS = WORLD_WIDTH / ELEV_GRID_BLOCK;
+  const ELEV_GRID_ROWS = WORLD_HEIGHT / ELEV_GRID_BLOCK;
+  const elevationGrid = new Float32Array(ELEV_GRID_COLS * ELEV_GRID_ROWS);
+
+  /**
+   * Pre-evaluates continuous world elevation into a fast lookup grid.
+   */
+  function computeElevationGrid() {
+    for (let r = 0; r < ELEV_GRID_ROWS; r++) {
+      const wy = r * ELEV_GRID_BLOCK;
+      const rOffset = r * ELEV_GRID_COLS;
+      for (let c = 0; c < ELEV_GRID_COLS; c++) {
+        elevationGrid[rOffset + c] = getElevation(c * ELEV_GRID_BLOCK, wy);
+      }
+    }
+  }
+
+  /**
+   * Bilinearly samples the elevation grid at world coordinates (wx, wy).
+   */
+  function sampleElevation(wx, wy) {
+    const gx = wx / ELEV_GRID_BLOCK;
+    const gy = wy / ELEV_GRID_BLOCK;
+    const x0 = Math.floor(gx);
+    const y0 = Math.floor(gy);
+    const x1 = Math.min(ELEV_GRID_COLS - 1, x0 + 1);
+    const y1 = Math.min(ELEV_GRID_ROWS - 1, y0 + 1);
+    const fx = gx - x0;
+    const fy = gy - y0;
+
+    const idx00 = y0 * ELEV_GRID_COLS + x0;
+    const idx10 = y0 * ELEV_GRID_COLS + x1;
+    const idx01 = y1 * ELEV_GRID_COLS + x0;
+    const idx11 = y1 * ELEV_GRID_COLS + x1;
+
+    const top = elevationGrid[idx00] * (1 - fx) + elevationGrid[idx10] * fx;
+    const bot = elevationGrid[idx01] * (1 - fx) + elevationGrid[idx11] * fx;
+    return top * (1 - fy) + bot * fy;
+  }
+
+  /**
+   * [LAYER 1]: BEDROCK / ABYSS BASE
+   * 
+   * Homage to late-90s PC classics (Ultima Online, Diablo II, Tibia),
+   * supercharged with 2026 direct 32-bit pixel pipelines and typed memory buffers:
+   * - Flat Uint8Array voxel classification
+   * - Direct Uint32Array 32-bit (0xAABBGGRR) native pixel blit into ImageData
+   * - Tectonic fault lines & hydrothermal abyssal rifts
+   * - 2.5D oblique directional relief (NW sun angle catchlights & SE crevice shadows)
+   * - Discrete 2x2 texel mineral grain tooth (pyrite flecks, coarse basalt silt, micro-pits)
+   */
+  function bakeBedrockLayer() {
+    ctxL1.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    const imgDataL1 = ctxL1.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
+    const buf32 = new Uint32Array(imgDataL1.data.buffer);
+
+    const seed = config.noise.seed;
+
+    for (let by = 0; by < BEDROCK_ROWS; by++) {
+      const wy = by * BEDROCK_BLOCK;
+      const yCols = by * BEDROCK_COLS;
+      const yW0 = wy * WORLD_WIDTH;
+      const yW1 = yW0 + WORLD_WIDTH;
+
+      for (let bx = 0; bx < BEDROCK_COLS; bx++) {
+        const wx = bx * BEDROCK_BLOCK;
+        const elev = sampleElevation(wx, wy);
+
+        // 1. Classify discrete voxel geologic stratum
+        let vType;
+        if (elev < 0.16) {
+          vType = VOXEL_ABYSS_TRENCH;
+        } else if (elev < 0.32) {
+          vType = VOXEL_OCEANIC_BASALT;
+        } else if (elev < 0.48) {
+          vType = VOXEL_CONTINENTAL_SLATE;
+        } else {
+          vType = VOXEL_SUBTERRENE_GRANITE;
+        }
+        bedrockVoxels[yCols + bx] = vType;
+
+        // 2. Tectonic fault fissures / hydrothermal rifts
+        // Ridged noise creates snaking tectonic fracture veins
+        const riftNoise = Math.abs(simplex.noise2D(wx * 0.007, wy * 0.007));
+        const isFissure = riftNoise < 0.052;
+        const fissureCore = riftNoise < 0.022;
+
+        // 3. 2.5D Oblique Directional Relief (Classic 90s NW sun angle)
+        const slabNW = simplex.noise2D((wx - 3) * 0.011, (wy - 3) * 0.011);
+        const slabSE = simplex.noise2D((wx + 3) * 0.011, (wy + 3) * 0.011);
+        const relief = Math.round((slabNW - slabSE) * 9.0); // [-9, +9]
+
+        // 4. Discrete 2x2 texel mineral tooth (bitwise PRNG hash)
+        const grain = hash2D(bx, by, seed + 107);
+
+        let r, g, b;
+
+        if (vType === VOXEL_ABYSS_TRENCH) {
+          // Deepest Abyssal Trench: cold obsidian & dark ocean floor
+          r = 8 + relief;
+          g = 11 + relief;
+          b = 20 + relief;
+
+          if (isFissure) {
+            if (fissureCore && grain > 210) {
+              // Hydrothermal black smoker vent spark (bioluminescent teal/cyan heat)
+              r = 14; g = 44; b = 58;
+            } else {
+              // Deep oceanic crevasse void
+              r = 3; g = 5; b = 9;
+            }
+          } else {
+            // Micro mineral silt variation
+            if (grain > 215) { r += 4; g += 5; b += 7; }
+            else if (grain < 40) { r -= 3; g -= 3; b -= 5; }
+          }
+        } else if (vType === VOXEL_OCEANIC_BASALT) {
+          // Deep Oceanic Basalt: weathered dark seabed slabs
+          r = 15 + relief;
+          g = 21 + relief;
+          b = 33 + relief;
+
+          if (isFissure) {
+            // Fracture line through basalt plate
+            r = 6; g = 9; b = 15;
+          } else {
+            if (grain > 220) {
+              // Basalt quartz highlight
+              r += 7; g += 9; b += 12;
+            } else if (grain > 170) {
+              r += 3; g += 4; b += 6;
+            } else if (grain < 35) {
+              // Micro crevice shadow
+              r -= 4; g -= 5; b -= 7;
+            }
+          }
+        } else if (vType === VOXEL_CONTINENTAL_SLATE) {
+          // Continental Shelf: textured slate seabed beneath coastal shallows
+          r = 23 + relief;
+          g = 31 + relief;
+          b = 46 + relief;
+
+          if (isFissure) {
+            r = 11; g = 15; b = 24;
+          } else {
+            if (grain > 240) {
+              // Pyrite / Quartz crystal fleck (classic 90s mineral glint)
+              r += 18; g += 22; b += 28;
+            } else if (grain > 180) {
+              r += 6; g += 8; b += 11;
+            } else if (grain < 42) {
+              r -= 6; g -= 7; b -= 9;
+            }
+          }
+        } else {
+          // Sub-terrene Granite: dense ancient crust beneath the island
+          r = 28 + relief;
+          g = 35 + relief;
+          b = 49 + relief;
+
+          if (isFissure) {
+            r = 14; g = 18; b = 26;
+          } else {
+            if (grain > 238) {
+              // Pale feldspar/quartz crystal inclusion
+              r += 16; g += 18; b += 22;
+            } else if (grain > 185) {
+              r += 6; g += 7; b += 9;
+            } else if (grain < 40) {
+              r -= 6; g -= 7; b -= 8;
+            }
+          }
+        }
+
+        const pixelColor = packABGR(r, g, b, 255);
+
+        // Blit 2x2 texel block directly into 32-bit canvas buffer
+        buf32[yW0 + wx] = pixelColor;
+        buf32[yW0 + wx + 1] = pixelColor;
+        buf32[yW1 + wx] = pixelColor;
+        buf32[yW1 + wx + 1] = pixelColor;
+      }
+    }
+
+    ctxL1.putImageData(imgDataL1, 0, 0);
+  }
+
   // Stitched continuous shoreline contours (ordered loops with surface normals)
   let shorelineLoops = [];
 
@@ -1075,7 +1300,7 @@
       const wy = by * BLOCK;
       for (let bx = 0; bx < cols; bx++) {
         const wx = bx * BLOCK;
-        const elev = getElevation(wx, wy);
+        const elev = sampleElevation(wx, wy);
 
         // Water only covers areas where elevation < ELEV_SHALLOW_WATER
         if (elev >= ELEV_SHALLOW_WATER) continue;
@@ -1283,23 +1508,17 @@
   function bakeStaticLayers() {
     console.time('bakeStaticLayers');
 
-    // -------------------------------------------------------------
-    // [LAYER 1]: BEDROCK / ABYSS BASE (100% Opaque Universal Floor)
-    // -------------------------------------------------------------
-    ctxL1.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    const imgDataL1 = ctxL1.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
-    const dataL1 = imgDataL1.data;
+    // 0. Pre-evaluate continuous world elevation into fast lookup grid
+    computeElevationGrid();
 
-    // -------------------------------------------------------------
-    // [LAYER 2]: BIOME / GRASS FIELD (World-space continuous FBM & Micro-Tufts)
-    // -------------------------------------------------------------
+    // 1. Bake Bedrock (Layer 1) via flat typed voxel memory & direct Uint32Array 32-bit pipeline
+    bakeBedrockLayer();
+
+    // 2. Bake Biome Grass Field (Layer 2) & Topsoil, Paths & Beach Sand (Layer 3)
     ctxL2.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     const imgDataL2 = ctxL2.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
     const dataL2 = imgDataL2.data;
 
-    // -------------------------------------------------------------
-    // [LAYER 3]: TOPSOIL, PATHS & BEACH SAND (Extends under shallow water)
-    // -------------------------------------------------------------
     ctxL3.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     const imgDataL3 = ctxL3.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
     const dataL3 = imgDataL3.data;
@@ -1313,22 +1532,10 @@
       for (let bx = 0; bx < cols; bx++) {
         const wx = bx * BLOCK;
 
-        const elev = getElevation(wx, wy);
+        const elev = sampleElevation(wx, wy);
         const trailInfo = getTrailInfo(wx, wy);
 
-        // --- 1. Compute Bedrock Base [L1] ---
-        const rockNoise = (simplex.noise2D(wx * 0.02, wy * 0.02) + 1.0) * 0.5;
-        const siltNoise = (simplex.noise2D(wx * 0.008, wy * 0.008) + 1.0) * 0.5;
-
-        let r1 = 16 + Math.round(rockNoise * 14 + siltNoise * 6);
-        let g1 = 22 + Math.round(rockNoise * 16 + siltNoise * 8);
-        let b1 = 34 + Math.round(rockNoise * 22 + siltNoise * 12);
-
-        if (rockNoise > 0.78 && elev < ELEV_DEEP_WATER) {
-          r1 -= 8; g1 -= 8; b1 -= 10;
-        }
-
-        // --- 2. Compute Biome Grass Field [L2] with Organic Micro-Tufts ---
+        // --- Compute Biome Grass Field [L2] with Organic Micro-Tufts ---
         let grassAlpha = 0;
         let r2 = 0, g2 = 0, b2 = 0;
 
@@ -1386,7 +1593,7 @@
           }
         }
 
-        // --- 3. Compute Topsoil, Paths & Beach Sand [L3] ---
+        // --- Compute Topsoil, Paths & Beach Sand [L3] ---
         let sandAlpha = 0;
         let r3 = 0, g3 = 0, b3 = 0;
 
@@ -1459,12 +1666,6 @@
             if (cx >= WORLD_WIDTH) continue;
             const idx = (cy * WORLD_WIDTH + cx) * 4;
 
-            // Layer 1: Always 100% Opaque Bedrock
-            dataL1[idx] = r1;
-            dataL1[idx + 1] = g1;
-            dataL1[idx + 2] = b1;
-            dataL1[idx + 3] = 255;
-
             // Layer 2: Biome Grass with Alpha Mask
             dataL2[idx] = r2;
             dataL2[idx + 1] = g2;
@@ -1481,7 +1682,6 @@
       }
     }
 
-    ctxL1.putImageData(imgDataL1, 0, 0);
     ctxL2.putImageData(imgDataL2, 0, 0);
     ctxL3.putImageData(imgDataL3, 0, 0);
 
