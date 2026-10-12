@@ -927,6 +927,140 @@
 
   let simplex = new SimplexNoise(config.noise.seed);
 
+  // =========================================================================
+  // CONTINENTAL RIVER SYSTEM (Meandering Stream: NW Forest to SE Ocean)
+  // =========================================================================
+  // Originates in top-left (Sector 1 Continental Forest), meanders across the headland,
+  // passes under the North Highway wooden bridge, curves past the camp promontory,
+  // and discharges into Sector 6 East Coastal Shallows.
+  const RIVER_WAYPOINTS = [
+    { x: -30,  y: 120 }, // NW Offscreen origin in Sector 1
+    { x: 160,  y: 160 }, // Sector 1 Continental Forest stream
+    { x: 340,  y: 220 }, // Meandering forest reach
+    { x: 540,  y: 310 }, // Sector 1 / 2 border
+    { x: 740,  y: 390 }, // Entering Sector 2 / 5
+    { x: 920,  y: 450 }, // Bridge crossing at North Highway
+    { x: 1080, y: 530 }, // Curving north of Beach Camp
+    { x: 1240, y: 640 }, // Approaching East coast
+    { x: 1380, y: 760 }, // River estuary entering Sector 6 shallows
+    { x: 1560, y: 880 }  // Dissipating into ocean shelf
+  ];
+
+  const riverSegments = [];
+  const RIVER_BUCKET_SIZE = 64;
+  const RIVER_BUCKET_COLS = Math.ceil(WORLD_WIDTH / RIVER_BUCKET_SIZE) + 2;
+  const RIVER_BUCKET_ROWS = Math.ceil(WORLD_HEIGHT / RIVER_BUCKET_SIZE) + 2;
+  const riverBuckets = new Array(RIVER_BUCKET_COLS * RIVER_BUCKET_ROWS);
+
+  function initRiverSystem() {
+    riverSegments.length = 0;
+    for (let i = 0; i < riverBuckets.length; i++) {
+      riverBuckets[i] = [];
+    }
+
+    const n = RIVER_WAYPOINTS.length;
+    for (let i = 0; i < n - 1; i++) {
+      const p0 = RIVER_WAYPOINTS[Math.max(0, i - 1)];
+      const p1 = RIVER_WAYPOINTS[i];
+      const p2 = RIVER_WAYPOINTS[i + 1];
+      const p3 = RIVER_WAYPOINTS[Math.min(n - 1, i + 2)];
+
+      const steps = 16;
+      for (let s = 0; s < steps; s++) {
+        const t = s / steps;
+        const tNext = (s + 1) / steps;
+        const t2 = t * t, t3 = t2 * t;
+        const nt2 = tNext * tNext, nt3 = nt2 * tNext;
+
+        // Catmull-Rom interpolation with procedural wander
+        const wander1 = simplex.noise2D((i + t) * 1.5, 33.1) * 6;
+        const wander2 = simplex.noise2D((i + tNext) * 1.5, 33.1) * 6;
+
+        const x1 = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3) + wander1;
+        const y1 = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3) + wander1;
+        const x2 = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * tNext + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * nt2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * nt3) + wander2;
+        const y2 = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * tNext + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * nt2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * nt3) + wander2;
+
+        const globalT = (i + t) / (n - 1);
+        // River widens from 14px half-width in forest to 24px at ocean mouth
+        const halfWidth = 14 + globalT * 10;
+        const dx = x2 - x1, dy = y2 - y1;
+        const len = Math.hypot(dx, dy) || 1;
+
+        const seg = {
+          x1, y1, x2, y2,
+          dx: dx / len, dy: dy / len,
+          len,
+          halfWidth,
+          globalT,
+          minX: Math.min(x1, x2) - halfWidth * 1.8,
+          maxX: Math.max(x1, x2) + halfWidth * 1.8,
+          minY: Math.min(y1, y2) - halfWidth * 1.8,
+          maxY: Math.max(y1, y2) + halfWidth * 1.8
+        };
+        riverSegments.push(seg);
+
+        const c0 = Math.max(0, Math.floor(seg.minX / RIVER_BUCKET_SIZE));
+        const c1 = Math.min(RIVER_BUCKET_COLS - 1, Math.floor(seg.maxX / RIVER_BUCKET_SIZE));
+        const r0 = Math.max(0, Math.floor(seg.minY / RIVER_BUCKET_SIZE));
+        const r1 = Math.min(RIVER_BUCKET_ROWS - 1, Math.floor(seg.maxY / RIVER_BUCKET_SIZE));
+
+        for (let r = r0; r <= r1; r++) {
+          for (let c = c0; c <= c1; c++) {
+            riverBuckets[r * RIVER_BUCKET_COLS + c].push(seg);
+          }
+        }
+      }
+    }
+  }
+
+  initRiverSystem();
+
+  /**
+   * Fast spatial lookup for continuous river channel geometry, water mask, and flow vector.
+   */
+  function getRiverInfo(wx, wy) {
+    const col = Math.floor(wx / RIVER_BUCKET_SIZE);
+    const row = Math.floor(wy / RIVER_BUCKET_SIZE);
+    if (col < 0 || col >= RIVER_BUCKET_COLS || row < 0 || row >= RIVER_BUCKET_ROWS) return null;
+    const list = riverBuckets[row * RIVER_BUCKET_COLS + col];
+    if (!list || list.length === 0) return null;
+
+    let bestDist = 1e9;
+    let bestSeg = null;
+
+    for (let i = 0; i < list.length; i++) {
+      const seg = list[i];
+      const vx = wx - seg.x1;
+      const vy = wy - seg.y1;
+      const proj = vx * seg.dx + vy * seg.dy;
+      const clampedProj = Math.max(0, Math.min(seg.len, proj));
+      const closestX = seg.x1 + seg.dx * clampedProj;
+      const closestY = seg.y1 + seg.dy * clampedProj;
+      const dist = Math.hypot(wx - closestX, wy - closestY);
+
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestSeg = seg;
+      }
+    }
+
+    if (bestSeg && bestDist < bestSeg.halfWidth * 1.6) {
+      const normDist = bestDist / bestSeg.halfWidth;
+      return {
+        dist: bestDist,
+        normDist,
+        inWater: normDist <= 1.0,
+        bank: normDist > 1.0 && normDist < 1.6,
+        flowDx: bestSeg.dx,
+        flowDy: bestSeg.dy,
+        halfWidth: bestSeg.halfWidth,
+        globalT: bestSeg.globalT
+      };
+    }
+    return null;
+  }
+
   /**
    * Evaluates procedural elevation at world pixel coordinate (wx, wy) for Beach Camp.
    * Models the South-East corner / headland of a massive off-screen island continent:
@@ -976,6 +1110,27 @@
       // Abyssal deep trench in the far south-east ocean
       const seDrop = Math.hypot((wx - 1400) / 520, (wy - 1100) / 436);
       elev -= seDrop * 0.14;
+    }
+
+    // Continental River Channel Carving (NW to SE meander)
+    // Physically carves a U-shaped stream channel with sloping earthen banks
+    const rInfo = getRiverInfo(wx, wy);
+    if (rInfo) {
+      if (rInfo.inWater) {
+        // Carve riverbed down below shallow water level (0.44) to 0.36 - 0.40
+        const bedTarget = 0.36 + 0.04 * (rInfo.normDist * rInfo.normDist);
+        if (elev > bedTarget) {
+          elev = bedTarget;
+        }
+      } else if (rInfo.bank) {
+        // Sloping earthen riverbanks transitioning smoothly into inland plateau
+        const bankFactor = (rInfo.normDist - 1.0) / 0.6; // [0, 1]
+        const smoothBank = bankFactor * bankFactor * (3 - 2 * bankFactor); // cubic smoothstep
+        const bedEdge = 0.40;
+        if (elev > bedEdge) {
+          elev = bedEdge + (elev - bedEdge) * smoothBank;
+        }
+      }
     }
 
     return Math.max(0.0, Math.min(1.0, elev));
@@ -1668,9 +1823,11 @@
         let soilAlpha = 0;
         let r2 = 0, g2 = 0, b2 = 0;
 
-        // Tectonic fissures rip directly through topsoil into the bedrock chasm void (exposing #05080c abyss cores)
-        if (isFissure) {
-          soilAlpha = 0;
+        // Continental bedrock fissures: on land (elev >= ELEV_DEEP_WATER), topsoil FILLS the fractures!
+        // Bedrock fissures only pierce through to abyss in open ocean floor (elev < ELEV_DEEP_WATER)
+        // or on high steep eroded bluffs (isRockyCrag).
+        if (isFissure && elev < ELEV_DEEP_WATER) {
+          soilAlpha = 0; // Seafloor abyss chasms exposed under ocean
         } else if (elev >= ELEV_DEEP_WATER) {
           // Check high rocky bluff / steep crag suppression (exposing sub-terrene granite bedrock slab)
           const rockiness = simplex.noise2D(wx * 0.013 + 19.1, wy * 0.013 + 43.7);
@@ -1683,7 +1840,32 @@
             const microGrain = (simplex.noise2D(wx * 0.06, wy * 0.06) + 1.0) * 0.5;
             const humusNoise = (simplex.noise2D(wx * 0.018, wy * 0.018) + 1.0) * 0.5;
 
-            if (elev < ELEV_SHALLOW_WATER) {
+            // Check River System (Meandering Stream Channel)
+            const rInfo = getRiverInfo(wx, wy);
+
+            if (rInfo && rInfo.inWater) {
+              // RIVERBED: Smooth river pebbles, water-washed stones, and dark river silt
+              soilAlpha = 1.0;
+              const pebbleNoise = simplex.noise2D(wx * 0.16, wy * 0.16);
+              const siltGrain = (simplex.noise2D(wx * 0.05, wy * 0.05) + 1.0) * 0.5;
+
+              // Dark wet river silt & washed stones
+              let riverR = Math.round(76 + siltGrain * 18);
+              let riverG = Math.round(60 + siltGrain * 14);
+              let riverB = Math.round(42 + siltGrain * 12);
+
+              if (pebbleNoise > 0.65) {
+                // Smooth grey/amber river pebble
+                riverR += 38; riverG += 36; riverB += 32;
+              } else if (pebbleNoise < -0.65) {
+                // Deep river silt pit
+                riverR -= 16; riverG -= 14; riverB -= 10;
+              }
+
+              r2 = Math.max(0, Math.min(255, riverR));
+              g2 = Math.max(0, Math.min(255, riverG));
+              b2 = Math.max(0, Math.min(255, riverB));
+            } else if (elev < ELEV_SHALLOW_WATER) {
               // 1. SUBMERGED SAND SHELF (beneath shallow water, down to ELEV_DEEP_WATER)
               const subFade = Math.min(1.0, (elev - ELEV_DEEP_WATER) / (ELEV_SHALLOW_WATER - ELEV_DEEP_WATER));
               soilAlpha = subFade;
@@ -1748,8 +1930,19 @@
               }
             }
 
+            // Riverbank transition: moist river mud and dark silt near the water
+            if (rInfo && rInfo.bank) {
+              const bankT = (rInfo.normDist - 1.0) / 0.6; // [0, 1]
+              const mudR = Math.round(64 + microGrain * 14);
+              const mudG = Math.round(48 + microGrain * 10);
+              const mudB = Math.round(32 + microGrain * 8);
+              r2 = Math.round(mudR * (1 - bankT) + r2 * bankT);
+              g2 = Math.round(mudG * (1 - bankT) + g2 * bankT);
+              b2 = Math.round(mudB * (1 - bankT) + b2 * bankT);
+            }
+
             // 4. PACKED DIRT TRAILS & WAGON HIGHWAYS WITH W-PROFILE
-            if (trailInfo.intensity > 0 && elev > ELEV_SHALLOW_WATER) {
+            if (trailInfo.intensity > 0 && elev > ELEV_SHALLOW_WATER && (!rInfo || !rInfo.inWater)) {
               const dirtGrain = (simplex.noise2D(wx * 0.07, wy * 0.07) + 1.0) * 0.5;
               const pebbleNoise = simplex.noise2D(wx * 0.18, wy * 0.18);
 
@@ -1782,9 +1975,16 @@
               b2 = Math.round(b2 * (1 - blendT) + dirtB * blendT);
             }
 
-            // Basalt lip edge exposure along chasms
-            if (isLip && ditherVal > 0.40) {
-              soilAlpha = 0; // Let the 1px raised basalt lip peek through
+            // Inland topsoil over bedrock fissures: soil settles into a dark damp sediment trough (Question 1)
+            if (isFissure && elev >= ELEV_SHALLOW_WATER && (!rInfo || !rInfo.inWater)) {
+              r2 = Math.max(0, r2 - 14);
+              g2 = Math.max(0, g2 - 10);
+              b2 = Math.max(0, b2 - 8);
+            }
+
+            // Basalt lip edge exposure along chasms in open ocean/crags
+            if (isLip && elev < ELEV_SHALLOW_WATER && ditherVal > 0.40) {
+              soilAlpha = 0; // Let the 1px raised basalt lip peek through in shallow water
             }
           }
         }
@@ -1942,6 +2142,18 @@
       anchorX: 35,
       anchorY: 55,
       isCampfire: true
+    },
+    // Rustic Timber River Bridge: Carries Continental North Highway across the river!
+    {
+      id: 'river-bridge',
+      asset: 'bridge',
+      isBridge: true,
+      x: 920,
+      y: 450,
+      renderWidth: 64,
+      renderHeight: 88,
+      anchorX: 32,
+      anchorY: 44
     },
     // Tropical Palm Trees lining the dunes & headland
     {
@@ -2201,9 +2413,15 @@
     const pBy = Math.max(0, Math.min(BEDROCK_ROWS - 1, Math.floor(player.y / BEDROCK_BLOCK)));
     const pV = bedrockVoxels[pBy * BEDROCK_COLS + pBx];
 
+    const rInfo = getRiverInfo(player.x, player.y);
+    const onBridge = Math.hypot(player.x - 920, player.y - 450) < 36;
+
     let substrateName = 'Continental Loam 🍂';
-    if ((pV & VOXEL_FLAG_CORE) !== 0) substrateName = 'Abyss Chasm 🌋';
-    else if ((pV & VOXEL_FLAG_FISSURE) !== 0) substrateName = 'Tectonic Rift 🌋';
+    if (onBridge) substrateName = 'Wooden River Bridge 🪵';
+    else if (rInfo && rInfo.inWater) substrateName = 'Flowing Stream 🏞️';
+    else if (rInfo && rInfo.bank) substrateName = 'Moist Riverbank 🌾';
+    else if ((pV & VOXEL_FLAG_CORE) !== 0) substrateName = 'Abyss Chasm 🌋';
+    else if ((pV & VOXEL_FLAG_FISSURE) !== 0 && curElev < ELEV_DEEP_WATER) substrateName = 'Submarine Rift 🌋';
     else if ((pV & VOXEL_FLAG_LIP) !== 0) substrateName = 'Basalt Lip 🪨';
     else if (curElev < ELEV_DEEP_WATER) substrateName = 'Deep Ocean 🌊';
     else if (curElev < ELEV_SHALLOW_WATER) substrateName = 'Shallow Water 💦';
@@ -2422,6 +2640,48 @@
       }
     }
 
+    // 4. Directional Meandering River Flow Currents (NW to SE downstream)
+    const riverFlowSpeed = timeSec * waterSpeed * 2.6;
+    for (let sIdx = 0; sIdx < riverSegments.length; sIdx++) {
+      const seg = riverSegments[sIdx];
+      // Only draw river flow on the inland reach before ocean blend
+      if (seg.globalT > 0.88) continue;
+
+      const flowPhase = (sIdx * 0.45 - riverFlowSpeed) % (Math.PI * 2);
+      const flowBreath = (Math.sin(flowPhase) + 1.0) * 0.5; // [0, 1]
+
+      if (flowBreath > 0.25) {
+        // Lateral river width ripples
+        const perpX = -seg.dy;
+        const perpY = seg.dx;
+
+        // Draw 2 streamline ribbons
+        for (const offsetSign of [-0.4, 0.35]) {
+          const offDist = seg.halfWidth * offsetSign;
+          const sx1 = seg.x1 + perpX * offDist;
+          const sy1 = seg.y1 + perpY * offDist;
+          const sx2 = seg.x2 + perpX * offDist;
+          const sy2 = seg.y2 + perpY * offDist;
+
+          targetCtx.beginPath();
+          targetCtx.moveTo(sx1, sy1);
+          targetCtx.lineTo(sx2, sy2);
+          targetCtx.strokeStyle = `rgba(186, 230, 253, ${(0.14 * flowBreath).toFixed(2)})`;
+          targetCtx.lineWidth = isPixelFoam ? 2 : 1.5;
+          targetCtx.stroke();
+        }
+
+        // Sparkling water ripple highlights over river rocks
+        if ((sIdx % 3 === 0) && flowBreath > 0.65) {
+          const rippleX = seg.x1 + (seg.x2 - seg.x1) * 0.5 + (Math.sin(sIdx * 3.7) * seg.halfWidth * 0.4);
+          const rippleY = seg.y1 + (seg.y2 - seg.y1) * 0.5 + (Math.cos(sIdx * 3.7) * seg.halfWidth * 0.4);
+          targetCtx.fillStyle = 'rgba(255, 255, 255, 0.42)';
+          const rSize = isPixelFoam ? 3 : 2;
+          targetCtx.fillRect(rippleX, rippleY, rSize, rSize);
+        }
+      }
+    }
+
     targetCtx.restore();
   }
 
@@ -2497,7 +2757,8 @@
       // -------------------------------------------------------------
       // Submerged Foot Wash & Ripple Effect (when standing in water)
       // -------------------------------------------------------------
-      if (isSubmerged && !ent.isSwimmer) {
+      const onBridge = ent.isPlayer && (Math.hypot(ent.x - 920, ent.y - 450) < 36);
+      if (isSubmerged && !ent.isSwimmer && !onBridge) {
         targetCtx.save();
 
         // 1. Water wash tint over submerged lower feet
@@ -2591,6 +2852,33 @@
       targetCtx.fillStyle = '#451a03';
       targetCtx.fillRect(sx + 12, sy + 20, 40, 4);
       targetCtx.fillRect(sx + 12, sy + 44, 40, 4);
+    } else if (ent.isBridge || ent.asset === 'bridge') {
+      // Rustic Timber Bridge across the River
+      // Bridge stringers (dark wood beams)
+      targetCtx.fillStyle = '#451a03';
+      targetCtx.fillRect(sx + 4, sy + 6, 8, ent.renderHeight - 12);
+      targetCtx.fillRect(sx + ent.renderWidth - 12, sy + 6, 8, ent.renderHeight - 12);
+
+      // Horizontal wooden floor planks
+      for (let py = 8; py < ent.renderHeight - 10; py += 10) {
+        targetCtx.fillStyle = (py % 20 === 8) ? '#78350f' : '#92400e';
+        targetCtx.fillRect(sx + 6, sy + py, ent.renderWidth - 12, 8);
+        targetCtx.strokeStyle = '#451a03';
+        targetCtx.lineWidth = 1;
+        targetCtx.strokeRect(sx + 6, sy + py, ent.renderWidth - 12, 8);
+      }
+
+      // Wooden railings and posts
+      targetCtx.fillStyle = '#b45309';
+      targetCtx.fillRect(sx + 2, sy + 4, 4, ent.renderHeight - 8);
+      targetCtx.fillRect(sx + ent.renderWidth - 6, sy + 4, 4, ent.renderHeight - 8);
+
+      // Post caps
+      targetCtx.fillStyle = '#fde68a';
+      targetCtx.fillRect(sx + 1, sy + 2, 6, 5);
+      targetCtx.fillRect(sx + 1, sy + ent.renderHeight - 7, 6, 5);
+      targetCtx.fillRect(sx + ent.renderWidth - 7, sy + 2, 6, 5);
+      targetCtx.fillRect(sx + ent.renderWidth - 7, sy + ent.renderHeight - 7, 6, 5);
     } else if (ent.asset === 'dock') {
       // Wooden Pier
       targetCtx.fillStyle = '#92400e';
@@ -2720,8 +3008,13 @@
     const sec = getSectorAt(wx, wy);
     document.getElementById('insp-pos').innerText = `X: ${wx}, Y: ${wy} [Sector ${sec.id}: ${sec.name} • ${sec.type} ${sec.icon}]`;
 
+    const rInfo = getRiverInfo(wx, wy);
+    const isBridge = Math.hypot(wx - 920, wy - 450) < 36;
+
     let elevDesc = `${elev.toFixed(2)} (Inland Plateau)`;
-    if (elev < ELEV_DEEP_WATER) elevDesc = `${elev.toFixed(2)} (Deep Ocean Basin)`;
+    if (rInfo && rInfo.inWater) elevDesc = `${elev.toFixed(2)} (Riverbed Channel)`;
+    else if (rInfo && rInfo.bank) elevDesc = `${elev.toFixed(2)} (Riverbank Slope)`;
+    else if (elev < ELEV_DEEP_WATER) elevDesc = `${elev.toFixed(2)} (Deep Ocean Basin)`;
     else if (elev < ELEV_SHALLOW_WATER) elevDesc = `${elev.toFixed(2)} (Shallow Coastal Water)`;
     else if (elev < ELEV_SAND_EXTENT) elevDesc = `${elev.toFixed(2)} (Dry Beach Sand)`;
     document.getElementById('insp-elev').innerText = elevDesc;
@@ -2751,9 +3044,16 @@
       const bx = Math.max(0, Math.min(BEDROCK_COLS - 1, Math.floor(wx / BEDROCK_BLOCK)));
       const by = Math.max(0, Math.min(BEDROCK_ROWS - 1, Math.floor(wy / BEDROCK_BLOCK)));
       const v = bedrockVoxels[by * BEDROCK_COLS + bx];
-      if ((v & VOXEL_FLAG_FISSURE) !== 0) {
+
+      if (isBridge) {
+        soilTxt = 'Wooden River Bridge Structure 🪵';
+      } else if (rInfo && rInfo.inWater) {
+        soilTxt = 'Riverbed Silt & Pebbles (Flowing Stream 🏞️)';
+      } else if (rInfo && rInfo.bank) {
+        soilTxt = 'Moist Riverbank Loam & Stones 🌾';
+      } else if ((v & VOXEL_FLAG_FISSURE) !== 0 && elev < ELEV_DEEP_WATER) {
         soilTxt = 'Torn Open (Abyss Rift Chasm)';
-      } else if ((v & VOXEL_FLAG_LIP) !== 0) {
+      } else if ((v & VOXEL_FLAG_LIP) !== 0 && elev < ELEV_SHALLOW_WATER) {
         soilTxt = 'Basalt Lip Rim (Exposed)';
       } else if (trail > 0.35) {
         soilTxt = 'Packed Earth Wagon Trail (Active)';
@@ -2781,7 +3081,8 @@
     // L4 Water
     let waterTxt = 'Dry Ground';
     if (config.layers.l4) {
-      if (elev < ELEV_DEEP_WATER) waterTxt = `Deep Ocean (Alpha ${config.water.deepAlpha})`;
+      if (rInfo && rInfo.inWater) waterTxt = `Flowing River Stream (Directional Flow)`;
+      else if (elev < ELEV_DEEP_WATER) waterTxt = `Deep Ocean (Alpha ${config.water.deepAlpha})`;
       else if (elev < ELEV_SHALLOW_WATER) waterTxt = `Shallow Wave (Alpha ${config.water.shallowAlpha})`;
     } else {
       waterTxt = '[Layer Hidden]';
