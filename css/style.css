@@ -1,0 +1,282 @@
+    :root {
+      --bg-dark: #121417;
+      --panel-bg: #1c1f24;
+      --panel-border: #2c323a;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --code-bg: #0f1115;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Main Viewport */
+    #viewport-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 50%, #1a1d23 0%, #0d0e11 100%);
+    }
+
+    #canvas-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+      overflow: auto;
+      padding: 24px;
+      scroll-behavior: smooth;
+    }
+
+    canvas {
+      background-color: #1a1c20;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px #2f343e;
+      border-radius: 4px;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      transition: transform 0.15s ease-out;
+      transform-origin: top left;
+      margin: auto;
+    }
+
+    /* Top HUD / Controls bar */
+    #top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      background: rgba(28, 31, 36, 0.85);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--panel-border);
+      z-index: 10;
+    }
+
+    .title-group h1 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: #fff;
+    }
+
+    .title-group p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .hud-stats {
+      display: flex;
+      gap: 16px;
+      font-size: 0.8rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: #cbd5e1;
+    }
+
+    .stat-pill {
+      background: rgba(0, 0, 0, 0.4);
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid #333a44;
+    }
+
+    /* Right Sidebar Controls */
+    #sidebar {
+      width: 360px;
+      background-color: var(--panel-bg);
+      border-left: 1px solid var(--panel-border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      z-index: 20;
+    }
+
+    .section {
+      padding: 16px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .section-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Checkboxes */
+    .checkbox-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      font-size: 0.84rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .checkbox-item input {
+      margin-right: 10px;
+      accent-color: var(--accent);
+      cursor: pointer;
+      width: 15px;
+      height: 15px;
+    }
+
+    .color-legend {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    /* Buttons & Inputs */
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    button {
+      background: #272c35;
+      color: #f1f5f9;
+      border: 1px solid #3d4552;
+      padding: 7px 12px;
+      font-size: 0.82rem;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-weight: 500;
+    }
+
+    button:hover {
+      background: #323844;
+      border-color: #4f5969;
+    }
+
+    button.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+      width: 100%;
+    }
+
+    button.primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.76rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    input[type="text"], input[type="number"], select {
+      width: 100%;
+      background: #121417;
+      border: 1px solid #333a44;
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 0.82rem;
+      font-family: inherit;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    /* Quick Preset Buttons */
+    .preset-card {
+      background: #14161b;
+      border: 1px solid #2b303a;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .preset-card:hover {
+      border-color: var(--accent);
+      background: #171a21;
+    }
+
+    .preset-card.active {
+      border-color: var(--accent);
+      background: rgba(59, 130, 246, 0.12);
+    }
+
+    .preset-card h4 {
+      font-size: 0.85rem;
+      margin-bottom: 3px;
+    }
+
+    .preset-card p {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .info-callout {
+      background: rgba(59, 130, 246, 0.08);
+      border-left: 3px solid var(--accent);
+      padding: 10px 12px;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.76rem;
+      color: #cbd5e1;
+      line-height: 1.45;
+    }
+
+    .key-badge {
+      display: inline-block;
+      background: #2c323a;
+      border: 1px solid #475161;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #fff;
+    }
