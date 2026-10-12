@@ -565,7 +565,7 @@
             <span class="layer-color-tag" style="background: var(--layer-l3);"></span>
             <div>
               <div class="layer-title-text">[L3] Biome / Grass Field</div>
-              <div class="layer-subtext">Vegetation carpet over soil (temporarily empty for substrate verification)</div>
+              <div class="layer-subtext">Procedural 4-species meadow carpet, moisture gradients & micro-grain</div>
             </div>
           </label>
           <div class="layer-actions">
@@ -1644,6 +1644,147 @@
     ctxL4_bathymetry.putImageData(imgDataL4, 0, 0);
   }
 
+  /**
+   * Bakes Layer 3 Biome Grass Field into offscreen canvas at native 1:1 resolution.
+   * Synthesizes 4-species macro-patchiness, moisture gradients, anisotropic wind streak,
+   * trail wear shoulders, riparian meadow fringes, and subpixel blade speckle.
+   */
+  function bakeGrassLayer() {
+    ctxL3.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    const imgData = ctxL3.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
+    const buf32 = new Uint32Array(imgData.data.buffer);
+
+    const seed = config.noise.seed;
+
+    // Four species palettes. Each entry is [base, sunlit, shaded].
+    // Deliberately desaturated — top-down grass reads darker than you expect.
+    const SPECIES = [
+      // 0: Lush wet meadow (valleys, near water)
+      { base: [ 58,  96,  46], sun: [ 92, 134,  60], shade: [ 30,  58,  30] },
+      // 1: Olive grassland (average)
+      { base: [ 88, 102,  54], sun: [128, 144,  74], shade: [ 54,  68,  36] },
+      // 2: Blue-green shaded floor (forest, north-facing)
+      { base: [ 44,  82,  62], sun: [ 72, 114,  82], shade: [ 24,  50,  42] },
+      // 3: Straw / sun-baked (ridges, dry spots, worn trail shoulders)
+      { base: [122, 116,  68], sun: [170, 158,  94], shade: [ 76,  70,  40] }
+    ];
+
+    const GRASS_START = ELEV_GRASS_MIN;        // 0.46: grass begins feathering in over sand
+    const GRASS_FULL  = ELEV_GRASS_MIN + 0.08; // 0.54: fully opaque grass meadow
+
+    for (let wy = 0; wy < WORLD_HEIGHT; wy++) {
+      const yOff = wy * WORLD_WIDTH;
+
+      for (let wx = 0; wx < WORLD_WIDTH; wx++) {
+        const elev = sampleElevation(wx, wy);
+
+        // --- 1. Mask: where does grass grow at all? ---
+        // Fast early-out: skips ocean, deep shallows, and low tide
+        if (elev < ELEV_SHALLOW_WATER) continue;
+
+        // Skip river water channel (riverbed pebbles and water flow)
+        const rInfo = getRiverInfo(wx, wy);
+        if (rInfo && rInfo.inWater) continue;
+
+        // Check trail wear: trails expose underlying topsoil/packed earth
+        const trail = getTrailIntensity(wx, wy);
+        // Heavily worn trail core (> 0.72) skips grass completely
+        if (trail > 0.72) continue;
+
+        // Blade speckle hash (needed for dune tufts and micro-grain)
+        const bladeHash = hash2D(wx, wy, seed + 909);
+
+        // Elevation mask fade
+        let maskFade = 0;
+        if (elev >= GRASS_FULL) {
+          maskFade = 1.0;
+        } else if (elev >= GRASS_START) {
+          maskFade = (elev - GRASS_START) / (GRASS_FULL - GRASS_START);
+        } else {
+          // Dune grass zone [ELEV_SHALLOW_WATER, GRASS_START]: sparse straw tufts on upper beach
+          if (bladeHash > 215) {
+            maskFade = ((elev - ELEV_SHALLOW_WATER) / (GRASS_START - ELEV_SHALLOW_WATER)) * 0.45;
+          } else {
+            continue;
+          }
+        }
+
+        // Trail shoulder fade: soft worn edge along paths
+        const trailFade = 1.0 - Math.min(1.0, trail * 1.35);
+        if (trailFade < 0.03) continue;
+
+        const mask = maskFade * trailFade;
+
+        // --- 2. Moisture field (drives species + tone) ---
+        const elevMoist  = 1.0 - Math.min(1.0, Math.max(0.0, (elev - GRASS_START) / 0.38));
+        const noiseMoist = (simplex.fbm(wx * 0.0035 + 12.7, wy * 0.0035 + 4.2, 3, 0.5, 2.0) + 1.0) * 0.5;
+        let moisture   = elevMoist * 0.55 + noiseMoist * 0.45;
+
+        // Riparian boost: riverbanks are lush wet meadow
+        if (rInfo && rInfo.bank) {
+          moisture = Math.max(moisture, 0.82);
+        }
+
+        // --- 3. Species patch selection (low-freq, patch-sized) ---
+        const patch = simplex.fbm(wx * 0.0016 + 71.3, wy * 0.0016 + 22.1, 2, 0.5, 2.0);
+        let speciesIdx;
+        // Worn trail edges and beach dunes favor dry straw / tough turf
+        if (trail > 0.35 || elev < GRASS_START) {
+          speciesIdx = 3;
+        } else if (moisture > 0.62) {
+          speciesIdx = patch > -0.1 ? 0 : 2;
+        } else if (moisture > 0.42) {
+          speciesIdx = patch >  0.1 ? 1 : 0;
+        } else {
+          speciesIdx = patch > -0.1 ? 1 : 3;
+        }
+        const sp = SPECIES[speciesIdx];
+
+        // --- 4. Clump density (mid-freq) ---
+        const clump = (simplex.fbm(wx * 0.018, wy * 0.018, 3, 0.55, 2.1) + 1.0) * 0.5;
+
+        // --- 5. Anisotropic streak — grass "lays" along the prevailing direction.
+        // Sample X ~4x faster than Y => features stretch horizontally on screen.
+        const streak = simplex.noise2D(wx * 0.022, wy * 0.006);
+
+        // --- Composite ---
+        let r = sp.base[0], g = sp.base[1], b = sp.base[2];
+
+        // Streak shifts between base and sunlit
+        const streakT = Math.max(0.0, Math.min(1.0, streak * 0.5 + 0.5));
+        r = r * (1.0 - streakT) + sp.sun[0] * streakT;
+        g = g * (1.0 - streakT) + sp.sun[1] * streakT;
+        b = b * (1.0 - streakT) + sp.sun[2] * streakT;
+
+        // Low clump density => darker (soil shadow between tufts)
+        const shadeT = Math.max(0.0, 1.0 - clump * 1.5);
+        r = r * (1.0 - shadeT) + sp.shade[0] * shadeT;
+        g = g * (1.0 - shadeT) + sp.shade[1] * shadeT;
+        b = b * (1.0 - shadeT) + sp.shade[2] * shadeT;
+
+        // Blade grain: three tiers, ~15% of pixels total
+        if      (bladeHash > 240) { r += 32; g += 34; b += 18; }  // sunlit tip
+        else if (bladeHash > 205) { r += 12; g += 14; b +=  6; }  // mid blade
+        else if (bladeHash <  28) { r -= 22; g -= 18; b -= 12; }  // shadow gap
+
+        // Clamp to [0, 255]
+        r = r < 0 ? 0 : r > 255 ? 255 : (r | 0);
+        g = g < 0 ? 0 : g > 255 ? 255 : (g | 0);
+        b = b < 0 ? 0 : b > 255 ? 255 : (b | 0);
+
+        const alpha = Math.round(mask * 255);
+        if (alpha <= 0) continue;
+
+        buf32[yOff + wx] = ((alpha & 0xFF) << 24) |
+                           ((b & 0xFF) << 16) |
+                           ((g & 0xFF) << 8) |
+                           (r & 0xFF);
+      }
+    }
+
+    ctxL3.putImageData(imgData, 0, 0);
+  }
+
 
 
   /**
@@ -1659,16 +1800,11 @@
     // 1. Bake Bedrock (Layer 1) via flat typed voxel memory & direct Uint32Array 32-bit pipeline
     bakeBedrockLayer();
 
-    // 2. Bake Topsoil, Earth & Beach Sand (Layer 2) & Biome Grass Field (Layer 3)
-    // Layer 2 is the continuous continental mantle over bedrock (inland loam, riverbed & beach dunes).
-    // Layer 3 (Biome / Grass Field) is temporarily cleared / empty as requested for substrate inspection.
+    // 2. Bake Topsoil, Earth & Beach Sand (Layer 2)
+    // Continuous continental mantle over bedrock (inland loam, riverbed & beach dunes).
     ctxL2.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     const imgDataL2 = ctxL2.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
     const bufL2 = new Uint32Array(imgDataL2.data.buffer);
-
-    ctxL3.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    const imgDataL3 = ctxL3.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
-    const bufL3 = new Uint32Array(imgDataL3.data.buffer);
 
     const seed = config.noise.seed;
 
@@ -1826,20 +1962,17 @@
           }
         }
 
-        // --- Layer 3: Biome / Grass Field (Temporarily Cleared / Empty) ---
-        // Explicitly set to 0 as requested so bare topsoil and bedrock can be inspected
         const pixelColorL2 = soilAlpha > 0 ? packABGR(r2, g2, b2, Math.round(soilAlpha * 255)) : 0;
         bufL2[yW0 + wx] = pixelColorL2;
-
-        const pixelColorL3 = 0; // Layer 3 empty
-        bufL3[yW0 + wx] = pixelColorL3;
       }
     }
 
     ctxL2.putImageData(imgDataL2, 0, 0);
-    ctxL3.putImageData(imgDataL3, 0, 0);
 
-    // Bake Continuous Bathymetric Base (Layer 4)
+    // 3. Bake Biome Grass Field (Layer 3)
+    bakeGrassLayer();
+
+    // 4. Bake Continuous Bathymetric Base (Layer 4)
     bakeWaterBathymetry();
 
 
@@ -2248,6 +2381,7 @@
     const rInfo = getRiverInfo(player.x, player.y);
     const onBridge = Math.hypot(player.x - 920, player.y - 450) < 36;
 
+    const trailWear = getTrailIntensity(player.x, player.y);
     let substrateName = 'Continental Loam 🍂';
     if (onBridge) substrateName = 'Wooden River Bridge 🪵';
     else if (rInfo && rInfo.inWater) substrateName = 'Flowing Stream 🏞️';
@@ -2258,6 +2392,8 @@
     else if (curElev < ELEV_DEEP_WATER) substrateName = 'Deep Ocean 🌊';
     else if (curElev < ELEV_SHALLOW_WATER) substrateName = 'Shallow Water 💦';
     else if (curElev <= ELEV_SAND_EXTENT + 0.03) substrateName = 'Beach Sand 🏖️';
+    else if (trailWear > 0.45) substrateName = 'Worn Footpath 🥾';
+    else if (curElev >= ELEV_GRASS_MIN) substrateName = 'Grass Meadow 🌿';
     document.getElementById('stat-player-substr').innerText = substrateName;
   }
 
@@ -2945,9 +3081,19 @@
     }
     document.getElementById('insp-l2').innerText = soilTxt;
 
-    // L3 Biome / Grass Field (Temporarily Cleared)
-    let grassTxt = 'Cleared / Empty (Substrate Verification)';
-    if (!config.layers.l3) {
+    // L3 Biome / Grass Field
+    let grassTxt = 'No Grass (Beach Sand / Water / Trail Core)';
+    if (config.layers.l3) {
+      if (elev >= ELEV_GRASS_MIN && (!rInfo || !rInfo.inWater)) {
+        const trail = getTrailIntensity(wx, wy);
+        if (trail > 0.45) grassTxt = 'Worn Trail Edge (Trampled Turf)';
+        else if (rInfo && rInfo.bank) grassTxt = 'Lush Riparian Meadow (Near River)';
+        else if (elev > 0.65) grassTxt = 'Highland Straw & Dry Turf';
+        else grassTxt = 'Living Field Meadow (Species Patch)';
+      } else if (elev >= ELEV_SHALLOW_WATER && elev < ELEV_GRASS_MIN) {
+        grassTxt = 'Sparse Dune Grass Tufts (Beach Fringe)';
+      }
+    } else {
       grassTxt = '[Layer Hidden]';
     }
     document.getElementById('insp-l3').innerText = grassTxt;
