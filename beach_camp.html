@@ -134,8 +134,7 @@
       background-color: #090c12;
       box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px #222938;
       border-radius: 6px;
-      image-rendering: pixelated;
-      image-rendering: crisp-edges;
+      image-rendering: auto;
       transition: transform 0.1s ease-out;
       transform-origin: center center;
     }
@@ -1243,10 +1242,10 @@
   // LAYER 1 MEMORY MODEL & BEDROCK ARCHITECTURE (The Retro Voxel Soul)
   // =========================================================================
   // Flat typed memory buffer storing discrete geological strata for the entire world.
-  // Backed by 2x2 texel density to give late-90s physical pixel tooth without subpixel blur.
-  const BEDROCK_BLOCK = 2; // 2x2 retro texel density matching classic game sprite scale
-  const BEDROCK_COLS = WORLD_WIDTH / BEDROCK_BLOCK;   // 960
-  const BEDROCK_ROWS = WORLD_HEIGHT / BEDROCK_BLOCK; // 768
+  // Backed by native 1:1 pixel fidelity for crisp, high-resolution classic PC art.
+  const BEDROCK_BLOCK = 1; // Native 1:1 pixel fidelity
+  const BEDROCK_COLS = WORLD_WIDTH;   // 1920
+  const BEDROCK_ROWS = WORLD_HEIGHT;  // 1536
 
   // Voxel classifications for discrete world memory
   const VOXEL_ABYSS_TRENCH = 0;       // Oceanic deep trench & hydrothermal rifts (< 0.16)
@@ -1423,13 +1422,11 @@
     const seed = config.noise.seed;
 
     for (let by = 0; by < BEDROCK_ROWS; by++) {
-      const wy = by * BEDROCK_BLOCK;
-      const yCols = by * BEDROCK_COLS;
+      const wy = by;
       const yW0 = wy * WORLD_WIDTH;
-      const yW1 = yW0 + WORLD_WIDTH;
 
       for (let bx = 0; bx < BEDROCK_COLS; bx++) {
-        const wx = bx * BEDROCK_BLOCK;
+        const wx = bx;
         const elev = sampleElevation(wx, wy);
 
         // 1. Classify discrete voxel geologic stratum
@@ -1450,14 +1447,14 @@
         if (rift.isFissure) flags |= VOXEL_FLAG_FISSURE;
         if (rift.isCore) flags |= VOXEL_FLAG_CORE;
         if (rift.isLip) flags |= VOXEL_FLAG_LIP;
-        bedrockVoxels[yCols + bx] = vType | flags;
+        bedrockVoxels[yW0 + wx] = vType | flags;
 
         // 3. 2.5D Oblique Directional Relief (Classic 90s NW sun angle)
         const slabNW = simplex.noise2D((wx - 3) * 0.011, (wy - 3) * 0.011);
         const slabSE = simplex.noise2D((wx + 3) * 0.011, (wy + 3) * 0.011);
         const relief = Math.round((slabNW - slabSE) * 9.0); // [-9, +9]
 
-        // 4. Discrete 2x2 texel mineral tooth (bitwise PRNG hash)
+        // 4. Discrete mineral tooth (bitwise PRNG hash)
         const grain = hash2D(bx, by, seed + 107);
 
         let r, g, b;
@@ -1520,11 +1517,8 @@
 
         const pixelColor = packABGR(r, g, b, 255);
 
-        // Blit 2x2 texel block directly into 32-bit canvas buffer
+        // Native 1:1 pixel blit directly into 32-bit canvas buffer
         buf32[yW0 + wx] = pixelColor;
-        buf32[yW0 + wx + 1] = pixelColor;
-        buf32[yW1 + wx] = pixelColor;
-        buf32[yW1 + wx + 1] = pixelColor;
       }
     }
 
@@ -1791,31 +1785,22 @@
 
     const seed = config.noise.seed;
 
-    // 4x4 Ordered Bayer Matrix for crunchy, tactile retro dither stippling
-    const BAYER_4X4 = [
-       0/16,  8/16,  2/16, 10/16,
-      12/16,  4/16, 14/16,  6/16,
-       3/16, 11/16,  1/16,  9/16,
-      15/16,  7/16, 13/16,  5/16
-    ];
+
 
     for (let by = 0; by < BEDROCK_ROWS; by++) {
-      const wy = by * BEDROCK_BLOCK;
-      const yCols = by * BEDROCK_COLS;
+      const wy = by;
       const yW0 = wy * WORLD_WIDTH;
-      const yW1 = yW0 + WORLD_WIDTH;
 
       for (let bx = 0; bx < BEDROCK_COLS; bx++) {
-        const wx = bx * BEDROCK_BLOCK;
+        const wx = bx;
 
         const elev = sampleElevation(wx, wy);
 
         // Retrieve bedrock geological classification and tectonic fracture flags
-        const v = bedrockVoxels[yCols + bx];
+        const v = bedrockVoxels[yW0 + bx];
         const isFissure = (v & VOXEL_FLAG_FISSURE) !== 0;
         const isLip = (v & VOXEL_FLAG_LIP) !== 0;
 
-        const ditherVal = BAYER_4X4[((by & 3) << 2) | (bx & 3)];
         const grainHash = hash2D(bx, by, seed + 511);
 
         // --- Compute Layer 2: Continental Topsoil, Earth & Beach Sand ---
@@ -1830,7 +1815,7 @@
         } else if (elev >= ELEV_DEEP_WATER) {
           // Check high rocky bluff / steep crag suppression (exposing sub-terrene granite bedrock slab)
           const rockiness = simplex.noise2D(wx * 0.013 + 19.1, wy * 0.013 + 43.7);
-          const isRockyCrag = elev > 0.66 && rockiness > 0.68 && ((rockiness - 0.68) / 0.32 > ditherVal);
+          const isRockyCrag = elev > 0.68 && rockiness > 0.72;
 
           if (isRockyCrag) {
             soilAlpha = 0; // Exposes bare granite bedrock underneath
@@ -1891,17 +1876,17 @@
                 sandR += 22; sandG += 22; sandB += 20;
               }
 
-              if (sandT > 0.60) {
-                // Dithered transition from coastal sand to inland earth/loam
-                const blend = (sandT - 0.60) / 0.40;
-                const ditheredBlend = blend > ditherVal ? 1.0 : 0.0;
+              // Smooth cubic interpolation between coastal sand and inland earth/loam
+              if (sandT > 0.40) {
+                const blend = Math.max(0, Math.min(1.0, (sandT - 0.40) / 0.60));
+                const smoothBlend = blend * blend * (3 - 2 * blend);
                 const loamR = Math.round(118 + humusNoise * 20);
                 const loamG = Math.round(84  + humusNoise * 16);
                 const loamB = Math.round(52  + humusNoise * 12);
 
-                r2 = Math.round(sandR * (1 - ditheredBlend) + loamR * ditheredBlend);
-                g2 = Math.round(sandG * (1 - ditheredBlend) + loamG * ditheredBlend);
-                b2 = Math.round(sandB * (1 - ditheredBlend) + loamB * ditheredBlend);
+                r2 = Math.round(sandR * (1 - smoothBlend) + loamR * smoothBlend);
+                g2 = Math.round(sandG * (1 - smoothBlend) + loamG * smoothBlend);
+                b2 = Math.round(sandB * (1 - smoothBlend) + loamB * smoothBlend);
               } else {
                 r2 = sandR; g2 = sandG; b2 = sandB;
               }
@@ -1948,7 +1933,7 @@
             }
 
             // Basalt lip edge exposure along chasms in open ocean/crags
-            if (isLip && elev < ELEV_SHALLOW_WATER && ditherVal > 0.40) {
+            if (isLip && elev < ELEV_SHALLOW_WATER && (grainHash & 3) === 0) {
               soilAlpha = 0; // Let the 1px raised basalt lip peek through in shallow water
             }
           }
@@ -1958,15 +1943,9 @@
         // Explicitly set to 0 as requested so bare topsoil and bedrock can be inspected
         const pixelColorL2 = soilAlpha > 0 ? packABGR(r2, g2, b2, Math.round(soilAlpha * 255)) : 0;
         bufL2[yW0 + wx] = pixelColorL2;
-        bufL2[yW0 + wx + 1] = pixelColorL2;
-        bufL2[yW1 + wx] = pixelColorL2;
-        bufL2[yW1 + wx + 1] = pixelColorL2;
 
         const pixelColorL3 = 0; // Layer 3 empty
         bufL3[yW0 + wx] = pixelColorL3;
-        bufL3[yW0 + wx + 1] = pixelColorL3;
-        bufL3[yW1 + wx] = pixelColorL3;
-        bufL3[yW1 + wx + 1] = pixelColorL3;
       }
     }
 
@@ -2717,22 +2696,22 @@
           // Spray categorization:
           if (normDisp > 1.8 && surge > -0.2) {
             // Forward-thrown white spray droplets (wave-top crash)
-            const sz = isPixelFoam ? 2 : (rndType < 3 ? 1.5 : 2);
+            const sz = isPixelFoam ? 2 : 1;
             whiteSpray.push({ x: sx, y: sy, sz });
           } else if (normDisp < -1.2) {
             // Shadowed foam troughs & aerated underside (cool grey noise)
-            const sz = isPixelFoam ? 2 : (rndType < 4 ? 1.5 : 2);
+            const sz = isPixelFoam ? 2 : 1;
             greyNoise.push({ x: sx, y: sy, sz });
           } else {
             // Breaking ridge: mixture of white crest tops and translucent grey/mist noise
             if (rndType < 3) {
-              const sz = isPixelFoam ? 2 : 2;
+              const sz = isPixelFoam ? 2 : 1;
               whiteSpray.push({ x: sx, y: sy, sz });
             } else if (rndType < 6) {
-              const sz = isPixelFoam ? 2 : (rndType === 4 ? 1.5 : 2);
+              const sz = isPixelFoam ? 2 : 1;
               mistSpray.push({ x: sx, y: sy, sz });
             } else {
-              const sz = isPixelFoam ? 2 : 1.5;
+              const sz = isPixelFoam ? 2 : 1;
               greyNoise.push({ x: sx, y: sy, sz });
             }
           }
@@ -2748,7 +2727,7 @@
                 wx = Math.round(wx / 2) * 2;
                 wy = Math.round(wy / 2) * 2;
               }
-              frothWake.push({ x: wx, y: wy, sz: isPixelFoam ? 2 : 1.5 });
+              frothWake.push({ x: wx, y: wy, sz: isPixelFoam ? 2 : 1 });
             }
           }
         }
