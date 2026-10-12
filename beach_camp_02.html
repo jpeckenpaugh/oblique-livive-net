@@ -1512,88 +1512,131 @@
 
 
   /**
-   * Bakes Layer 4 Bathymetric Water Base into an offscreen canvas.
-   * Uses a continuous 5-stop cubic smoothstep spline to eliminate all chunk staircases.
+   * Bakes Layer 4 Bathymetric Water Base into an offscreen canvas at native 1:1 resolution.
+   * Synthesizes 1:1 gradient-based distance coverage (AA) with a 6px optical depth fade
+   * and direct Uint32Array 32-bit pixel blitting for instantaneous interactive rebakes.
    */
   function bakeWaterBathymetry() {
     ctxL4_bathymetry.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     const imgDataL4 = ctxL4_bathymetry.createImageData(WORLD_WIDTH, WORLD_HEIGHT);
-    const dataL4 = imgDataL4.data;
-
-    const BLOCK = 4;
-    const cols = WORLD_WIDTH / BLOCK;
-    const rows = WORLD_HEIGHT / BLOCK;
+    const buf32 = new Uint32Array(imgDataL4.data.buffer);
 
     const shallowAlpha = config.water.shallowAlpha;
     const deepAlpha = config.water.deepAlpha;
 
-    // 5-Stop Continuous Bathymetric Color Stops
-    // [elev, R, G, B, alpha]
-    const stops = [
-      [0.08, 5, 9, 20, deepAlpha],                                    // 0: Abyss Deep Trench
-      [0.20, 10, 27, 56, deepAlpha],                                   // 1: Pelagic Ocean
-      [0.32, 14, 69, 112, deepAlpha * 0.65 + shallowAlpha * 0.35],    // 2: Continental Shelf
-      [0.40, 18, 140, 158, deepAlpha * 0.25 + shallowAlpha * 0.75],   // 3: Coastal Lagoon / Shoal
-      [ELEV_SHALLOW_WATER, 34, 211, 238, shallowAlpha]                // 4: Shoreline Shallows (pale cyan)
-    ];
+    // Pre-calculate intermediate alphas for the 5-stop spline
+    const aShelf = deepAlpha * 0.65 + shallowAlpha * 0.35;
+    const aShoal = deepAlpha * 0.25 + shallowAlpha * 0.75;
 
-    for (let by = 0; by < rows; by++) {
-      const wy = by * BLOCK;
-      for (let bx = 0; bx < cols; bx++) {
-        const wx = bx * BLOCK;
+    const H = 1.5;            // Subpixel coverage half-width (in world pixels)
+    const inv2H = 1.0 / (2.0 * H);
+    const FADE_DIST = 6.0;    // Optical water depth ramp width (in world pixels)
+    const invTotalSpan = 1.0 / (FADE_DIST + H);
+
+    const maxWx = WORLD_WIDTH - 1;
+    const maxWy = WORLD_HEIGHT - 1;
+
+    for (let wy = 0; wy < WORLD_HEIGHT; wy++) {
+      const yOffset = wy * WORLD_WIDTH;
+
+      for (let wx = 0; wx < WORLD_WIDTH; wx++) {
         const elev = sampleElevation(wx, wy);
 
-        // Water only covers areas where elevation < ELEV_SHALLOW_WATER
-        if (elev >= ELEV_SHALLOW_WATER) continue;
+        // 1. Fast inland early-out: skip plateaus, camps, and dry interior
+        if (elev >= ELEV_SHALLOW_WATER + 0.03) continue;
 
-        let r = stops[0][1], g = stops[0][2], b = stops[0][3], a = stops[0][4];
+        let distPx = 999.0;
 
-        if (elev <= stops[0][0]) {
-          r = stops[0][1]; g = stops[0][2]; b = stops[0][3]; a = stops[0][4];
+        // 2. Gradient calculation: only evaluate on the near-shore transition ribbon (elev >= 0.36)
+        // Deep ocean and abyss are guaranteed distPx >> 6.0, bypassing gradient math completely
+        if (elev >= 0.36) {
+          const elevR = sampleElevation(wx < maxWx ? wx + 1 : maxWx, wy);
+          const elevL = sampleElevation(wx > 0 ? wx - 1 : 0, wy);
+          const elevD = sampleElevation(wx, wy < maxWy ? wy + 1 : maxWy);
+          const elevU = sampleElevation(wx, wy > 0 ? wy - 1 : 0);
+
+          const gx = (elevR - elevL) * 0.5;
+          const gy = (elevD - elevU) * 0.5;
+          const grad = Math.max(1e-5, Math.hypot(gx, gy));
+          distPx = (ELEV_SHALLOW_WATER - elev) / grad;
+
+          // Pixel center is beyond the landward subpixel feather band -> completely dry
+          if (distPx <= -H) continue;
+        }
+
+        // 3. Evaluate 5-Stop Continuous Bathymetric Color & Base Alpha Spline
+        let r, g, b, baseAlpha;
+
+        if (elev <= 0.08) {
+          // Stop 0: Abyss Deep Trench
+          r = 5; g = 9; b = 20; baseAlpha = deepAlpha;
+        } else if (elev <= 0.20) {
+          // Stop 0 -> 1: Pelagic Ocean
+          const t = (elev - 0.08) * 8.333333; // 1 / 0.12
+          const s = t * t * (3.0 - 2.0 * t);
+          r = Math.round(5 * (1.0 - s) + 10 * s);
+          g = Math.round(9 * (1.0 - s) + 27 * s);
+          b = Math.round(20 * (1.0 - s) + 56 * s);
+          baseAlpha = deepAlpha;
+        } else if (elev <= 0.32) {
+          // Stop 1 -> 2: Continental Shelf
+          const t = (elev - 0.20) * 8.333333; // 1 / 0.12
+          const s = t * t * (3.0 - 2.0 * t);
+          r = Math.round(10 * (1.0 - s) + 14 * s);
+          g = Math.round(27 * (1.0 - s) + 69 * s);
+          b = Math.round(56 * (1.0 - s) + 112 * s);
+          baseAlpha = deepAlpha * (1.0 - s) + aShelf * s;
+        } else if (elev <= 0.40) {
+          // Stop 2 -> 3: Coastal Lagoon / Shoal
+          const t = (elev - 0.32) * 12.5; // 1 / 0.08
+          const s = t * t * (3.0 - 2.0 * t);
+          r = Math.round(14 * (1.0 - s) + 18 * s);
+          g = Math.round(69 * (1.0 - s) + 140 * s);
+          b = Math.round(112 * (1.0 - s) + 158 * s);
+          baseAlpha = aShelf * (1.0 - s) + aShoal * s;
+        } else if (elev < ELEV_SHALLOW_WATER) {
+          // Stop 3 -> 4: Shoreline Shallows (pale cyan)
+          const t = (elev - 0.40) * 25.0; // 1 / 0.04
+          const s = t * t * (3.0 - 2.0 * t);
+          r = Math.round(18 * (1.0 - s) + 34 * s);
+          g = Math.round(140 * (1.0 - s) + 211 * s);
+          b = Math.round(158 * (1.0 - s) + 238 * s);
+          baseAlpha = aShoal * (1.0 - s) + shallowAlpha * s;
         } else {
-          // Find matching interval and interpolate with cubic smoothstep
-          for (let i = 0; i < stops.length - 1; i++) {
-            const e0 = stops[i][0];
-            const e1 = stops[i + 1][0];
-            if (elev >= e0 && elev <= e1) {
-              const t = (elev - e0) / (e1 - e0);
-              const s = t * t * (3 - 2 * t); // Cubic smoothstep
-
-              r = Math.round(stops[i][1] * (1 - s) + stops[i + 1][1] * s);
-              g = Math.round(stops[i][2] * (1 - s) + stops[i + 1][2] * s);
-              b = Math.round(stops[i][3] * (1 - s) + stops[i + 1][3] * s);
-              a = stops[i][4] * (1 - s) + stops[i + 1][4] * s;
-              break;
-            }
-          }
+          // In subpixel feather band on dry side: use shoreline shallows base tint
+          r = 34; g = 211; b = 238;
+          baseAlpha = shallowAlpha;
         }
 
-        // Feather alpha slightly at the dry sand edge
-        if (elev > ELEV_SHALLOW_WATER - 0.008) {
-          const edgeFade = (ELEV_SHALLOW_WATER - elev) / 0.008;
-          a *= Math.max(0, Math.min(1.0, edgeFade));
+        // 4. Modulate Alpha using Unified Shoreline Synthesis (Fix 1 + Fix 3)
+        let finalAlpha = baseAlpha;
+
+        if (distPx < FADE_DIST) {
+          // Fix 3: Optical water depth fade from 0 at shore band start to 1.0 at 6px
+          const tFade = Math.max(0.0, Math.min(1.0, (distPx + H) * invTotalSpan));
+          const fade = tFade * tFade * (3.0 - 2.0 * tFade);
+
+          // Fix 1: Subpixel geometric coverage across [-H, +H]
+          const tCov = Math.max(0.0, Math.min(1.0, (distPx + H) * inv2H));
+          const coverage = tCov * tCov * (3.0 - 2.0 * tCov);
+
+          finalAlpha = baseAlpha * fade * coverage;
         }
 
-        const alphaInt = Math.round(a * 255);
+        const alphaInt = Math.round(finalAlpha * 255);
+        if (alphaInt <= 0) continue;
 
-        for (let py = 0; py < BLOCK; py++) {
-          const cy = wy + py;
-          if (cy >= WORLD_HEIGHT) continue;
-          for (let px = 0; px < BLOCK; px++) {
-            const cx = wx + px;
-            if (cx >= WORLD_WIDTH) continue;
-            const idx = (cy * WORLD_WIDTH + cx) * 4;
-            dataL4[idx] = r;
-            dataL4[idx + 1] = g;
-            dataL4[idx + 2] = b;
-            dataL4[idx + 3] = alphaInt;
-          }
-        }
+        // 5. Native 32-bit little-endian blit (0xAABBGGRR)
+        buf32[yOffset + wx] = ((alphaInt & 0xFF) << 24) |
+                              ((b & 0xFF) << 16) |
+                              ((g & 0xFF) << 8) |
+                              (r & 0xFF);
       }
     }
 
     ctxL4_bathymetry.putImageData(imgDataL4, 0, 0);
   }
+
 
 
   /**
