@@ -2580,8 +2580,9 @@
       }
     }
 
-    // 3. Cohesive Contour-Following Shoreline Surf Ribbons
+    // 3. Cohesive Contour-Following Shoreline Surf Ribbons & Wave Crashing Spray
     const foamTime = timeSec * foamSpeed * 2.2;
+    const seed = config.noise.seed;
 
     for (const loop of shorelineLoops) {
       const n = loop.length;
@@ -2613,11 +2614,11 @@
           wy = Math.round(wy / 4) * 4;
         }
 
-        crestPts.push({ x: cx, y: cy });
+        crestPts.push({ x: cx, y: cy, nx: pt.nx, ny: pt.ny, breath, washDist });
         washPts.push({ x: wx, y: wy });
       }
 
-      // Pass A: Trailing Froth Wash (polygon strip)
+      // Pass A: Softened Wet-Sand & Backwash Froth Wash (polygon strip)
       targetCtx.beginPath();
       targetCtx.moveTo(crestPts[0].x, crestPts[0].y);
       for (let i = 1; i < n; i++) {
@@ -2627,31 +2628,156 @@
         targetCtx.lineTo(washPts[i].x, washPts[i].y);
       }
       targetCtx.closePath();
-      targetCtx.fillStyle = 'rgba(215, 248, 255, 0.32)';
+      targetCtx.fillStyle = isPixelFoam ? 'rgba(210, 240, 252, 0.26)' : 'rgba(210, 240, 252, 0.18)';
       targetCtx.fill();
 
-      // Pass B: Crisp Leading Surf Lip
+      // Pass B: Soft Smudged Wave Crest Underbody (Gentle feathered translucent gradient, NO solid white line)
+      // 1. Broad diffuse mist curl
       targetCtx.beginPath();
       targetCtx.moveTo(crestPts[0].x, crestPts[0].y);
       for (let i = 1; i < n; i++) {
         targetCtx.lineTo(crestPts[i].x, crestPts[i].y);
       }
       if (loop.isClosed) targetCtx.closePath();
-      targetCtx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
-      targetCtx.lineWidth = isPixelFoam ? 3 : 2.5;
+      targetCtx.strokeStyle = 'rgba(215, 238, 250, 0.15)';
+      targetCtx.lineWidth = isPixelFoam ? 5 : 6;
       targetCtx.lineJoin = 'round';
       targetCtx.lineCap = 'round';
       targetCtx.stroke();
 
-      // Pass C: Sparkling seafoam bubbles along wash
-      targetCtx.fillStyle = 'rgba(255, 255, 255, 0.78)';
-      for (let i = 0; i < n; i += 3) {
-        const p = washPts[i];
-        const bubblePulse = (Math.sin(timeSec * 5 + i * 2.3) + 1) * 0.5;
-        if (bubblePulse > 0.45) {
-          const sz = isPixelFoam ? 3 : 2;
-          targetCtx.fillRect(p.x, p.y, sz, sz);
+      // 2. Faint organic smudged crest contour (translucent, broken/wavy)
+      targetCtx.beginPath();
+      targetCtx.moveTo(crestPts[0].x, crestPts[0].y);
+      for (let i = 1; i < n; i++) {
+        targetCtx.lineTo(crestPts[i].x, crestPts[i].y);
+      }
+      if (loop.isClosed) targetCtx.closePath();
+      targetCtx.strokeStyle = 'rgba(235, 246, 253, 0.24)';
+      targetCtx.lineWidth = isPixelFoam ? 2 : 2.5;
+      targetCtx.lineJoin = 'round';
+      targetCtx.lineCap = 'round';
+      targetCtx.stroke();
+
+      // Pass C: Crashing Wave Spray & Dithered White/Grey Noise Tops
+      // Batched for maximum performance and 60 FPS lock
+      const whiteSpray = [];
+      const mistSpray = [];
+      const greyNoise = [];
+      const frothWake = [];
+
+      for (let i = 0; i < n; i++) {
+        const nextIdx = (i + 1) % n;
+        const p0 = crestPts[i];
+        const p1 = crestPts[nextIdx];
+        const dx = p1.x - p0.x;
+        const dy = p1.y - p0.y;
+        const segLen = Math.hypot(dx, dy);
+        if (segLen < 0.5) continue;
+
+        const nx = p0.nx;
+        const ny = p0.ny;
+        const tx = dx / segLen;
+        const ty = dy / segLen;
+
+        // Wave surge intensity at this point
+        const wavePhase = (loop[i].x * 0.012 + loop[i].y * 0.012);
+        const surge = Math.sin(foamTime + wavePhase);
+
+        // Subdivide segment into small spray clusters
+        const steps = Math.max(2, Math.round(segLen / 3.0));
+
+        for (let k = 0; k < steps; k++) {
+          const t = (k + 0.5) / steps;
+          const bx = p0.x + dx * t;
+          const by = p0.y + dy * t;
+
+          // Spatial + temporal pseudo-random hash for natural organic churn
+          const pHash = hash2D((i * 19 + k * 11) & 255, (Math.floor(foamTime * 4.5) + k * 7) & 255, seed + 337);
+          const pHash2 = hash2D((k * 23 + i * 13) & 255, (Math.floor(foamTime * 3.0) + i) & 255, seed + 719);
+
+          const rndNorm = (pHash & 15) / 15.0;     // [0, 1]
+          const rndType = (pHash >> 4) & 7;        // [0, 7]
+          const rndTang = (pHash2 & 15) / 15.0;    // [0, 1]
+          const churnTime = Math.sin(foamTime * 3.5 + i * 0.6 + k * 1.3);
+
+          // Forward spray throw increases during crashing surge (surge > 0)
+          const forwardThrow = Math.max(0, surge) * (1.8 + rndNorm * 4.2);
+          // Normal displacement across the crest breaking zone (-3px to +6px)
+          const normDisp = (rndNorm - 0.42) * 5.0 + forwardThrow + churnTime * 1.2;
+          const tangDisp = (rndTang - 0.5) * 3.0;
+
+          let sx = bx + nx * normDisp + tx * tangDisp;
+          let sy = by + ny * normDisp + ty * tangDisp;
+
+          if (isPixelFoam) {
+            sx = Math.round(sx / 2) * 2;
+            sy = Math.round(sy / 2) * 2;
+          }
+
+          // Spray categorization:
+          if (normDisp > 1.8 && surge > -0.2) {
+            // Forward-thrown white spray droplets (wave-top crash)
+            const sz = isPixelFoam ? 2 : (rndType < 3 ? 1.5 : 2);
+            whiteSpray.push({ x: sx, y: sy, sz });
+          } else if (normDisp < -1.2) {
+            // Shadowed foam troughs & aerated underside (cool grey noise)
+            const sz = isPixelFoam ? 2 : (rndType < 4 ? 1.5 : 2);
+            greyNoise.push({ x: sx, y: sy, sz });
+          } else {
+            // Breaking ridge: mixture of white crest tops and translucent grey/mist noise
+            if (rndType < 3) {
+              const sz = isPixelFoam ? 2 : 2;
+              whiteSpray.push({ x: sx, y: sy, sz });
+            } else if (rndType < 6) {
+              const sz = isPixelFoam ? 2 : (rndType === 4 ? 1.5 : 2);
+              mistSpray.push({ x: sx, y: sy, sz });
+            } else {
+              const sz = isPixelFoam ? 2 : 1.5;
+              greyNoise.push({ x: sx, y: sy, sz });
+            }
+          }
+
+          // Trailing backwash froth bubbles on the sand as water recedes
+          if (k % 2 === 0) {
+            const washT = 0.25 + 0.65 * ((pHash >> 1) & 7) / 7.0;
+            let wx = bx - nx * (p0.washDist * washT) + tx * tangDisp;
+            let wy = by - ny * (p0.washDist * washT) + ty * tangDisp;
+            const bubblePulse = Math.sin(foamTime * 4.0 + i * 2.1 + k * 1.5);
+            if (bubblePulse > 0.10) {
+              if (isPixelFoam) {
+                wx = Math.round(wx / 2) * 2;
+                wy = Math.round(wy / 2) * 2;
+              }
+              frothWake.push({ x: wx, y: wy, sz: isPixelFoam ? 2 : 1.5 });
+            }
+          }
         }
+      }
+
+      // Render Batched Spray & Noise Elements:
+      // 1. Aerated Cool Grey / Slate Shadow Noise
+      // (Creates the realistic optical depth of wave troughs & shaded water pockets)
+      targetCtx.fillStyle = 'rgba(160, 188, 206, 0.45)';
+      for (let p of greyNoise) {
+        targetCtx.fillRect(p.x, p.y, p.sz, p.sz);
+      }
+
+      // 2. Soft Translucent Sea-Mist & Froth Envelope
+      targetCtx.fillStyle = 'rgba(224, 242, 252, 0.50)';
+      for (let p of mistSpray) {
+        targetCtx.fillRect(p.x, p.y, p.sz, p.sz);
+      }
+
+      // 3. Crisp White Wave-Top Spray & Whitecaps
+      targetCtx.fillStyle = 'rgba(255, 255, 255, 0.78)';
+      for (let p of whiteSpray) {
+        targetCtx.fillRect(p.x, p.y, p.sz, p.sz);
+      }
+
+      // 4. Trailing Backwash Seafoam Bubbles
+      targetCtx.fillStyle = 'rgba(235, 248, 255, 0.38)';
+      for (let p of frothWake) {
+        targetCtx.fillRect(p.x, p.y, p.sz, p.sz);
       }
     }
 
