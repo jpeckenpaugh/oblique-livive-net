@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "image": "wooden-barrel-turntable-palette.webp",
+  "imageWidth": 512,
+  "imageHeight": 256,
+  "frameWidth": 128,
+  "frameHeight": 128,
+  "columns": 4,
+  "rows": 2,
+  "frameCount": 8,
+  "layout": "row-major",
+  "model": {
+    "name": "Wooden Barrel",
+    "source": "/models/lokarta-private/wooden_barrel_optimized.glb"
+  },
+  "capture": {
+    "mode": "still-turntable",
+    "cameraPitchDegrees": 45,
+    "transparentBackground": true,
+    "angleZeroDegrees": 0,
+    "angleConvention": "0° is the front view; increasing angles follow the application turntable order"
+  },
+  "encoding": {
+    "format": "WebP",
+    "paletteReduction": "adaptive median cut",
+    "maximumPaletteColors": 256,
+    "losslessAfterPaletteReduction": true,
+    "paletteColorsUsed": 256
+  },
+  "registrationPoint": {
+    "x": 64,
+    "y": 128,
+    "origin": "top-left",
+    "preset": "bottom-center"
+  },
+  "frames": [
+    {
+      "index": 0,
+      "label": "View 01 · 0°",
+      "direction": "view-1",
+      "directionName": "View 01 · 0°",
+      "state": "still",
+      "angleDegrees": 0,
+      "frameIndex": 0,
+      "x": 0,
+      "y": 0,
+      "width": 128,
+      "height": 128
+    },
+    {
+      "index": 1,
+      "label": "View 02 · 45°",
+      "direction": "view-2",
+      "directionName": "View 02 · 45°",
+      "state": "still",
+      "angleDegrees": 45,
+      "frameIndex": 1,
+      "x": 128,
+      "y": 0,
+      "width": 128,
+      "height": 128
+    },
+    {
+      "index": 2,
+      "label": "View 03 · 90°",
+      "direction": "view-3",
+      "directionName": "View 03 · 90°",
+      "state": "still",
+      "angleDegrees": 90,
+      "frameIndex": 2,
+      "x": 256,
+      "y": 0,
+      "width": 128,
+      "height": 128
+    },
+    {
+      "index": 3,
+      "label": "View 04 · 135°",
+      "direction": "view-4",
+      "directionName": "View 04 · 135°",
+      "state": "still",
+      "angleDegrees": 135,
+      "frameIndex": 3,
+      "x": 384,
+      "y": 0,
+      "width": 128,
+      "height": 128
+    },
+    {
+      "index": 4,
+      "label": "View 05 · 180°",
+      "direction": "view-5",
+      "directionName": "View 05 · 180°",
+      "state": "still",
+      "angleDegrees": 180,
+      "frameIndex": 4,
+      "x": 0,
+      "y": 128,
+      "width": 128,
+      "height": 128
+    },
+    {
+      "index": 5,
+      "label": "View 06 · 225°",
+      "direction": "view-6",
+      "directionName": "View 06 · 225°",
+      "state": "still",
+      "angleDegrees": 225,
+      "frameIndex": 5,
+      "x": 128,
+      "y": 128,
+      "width": 128,
+      "height": 128
+    },
+    {
+      "index": 6,
+      "label": "View 07 · 270°",
+      "direction": "view-7",
+      "directionName": "View 07 · 270°",
+      "state": "still",
+      "angleDegrees": 270,
+      "frameIndex": 6,
+      "x": 256,
+      "y": 128,
+      "width": 128,
+      "height": 128
+    },
+    {
+      "index": 7,
+      "label": "View 08 · 315°",
+      "direction": "view-8",
+      "directionName": "View 08 · 315°",
+      "state": "still",
+      "angleDegrees": 315,
+      "frameIndex": 7,
+      "x": 384,
+      "y": 128,
+      "width": 128,
+      "height": 128
+    }
+  ]
+}
