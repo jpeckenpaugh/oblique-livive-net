@@ -1220,6 +1220,13 @@
   const ctxL4_bathymetry = canvasL4_bathymetry.getContext('2d');
   const ctxL4_water = canvasL4_water.getContext('2d');
 
+  // Reusable offscreen buffer for alpha-aware sprite tinting.
+  // Sized for the largest sprite (we'll grow it on demand).
+  const tintCanvas = document.createElement('canvas');
+  tintCanvas.width = 256;
+  tintCanvas.height = 256;
+  const tintCtx = tintCanvas.getContext('2d');
+
   let lastWaterEvalNow = 0;
   const WATER_UPDATE_INTERVAL_MS = 100; // 10 FPS (100ms evaluation interval)
 
@@ -2518,7 +2525,40 @@
   }
 
   /**
-   * Render Layer 5: Entities & Props with Oblique 2.5D Stacking & Submerged Foot Wash
+   * Renders a sprite with alpha-aware underwater foot wash.
+   * Uses 'source-atop' composite mode to tint ONLY non-transparent sprite pixels.
+   */
+  function drawSpriteWithWash(ctx, img, srcX, srcY, srcW, srcH,
+                              dstX, dstY, dstW, dstH, washTop, washH, washColor) {
+    // Fast path — nothing submerged, just blit.
+    if (washH <= 0) {
+      ctx.drawImage(img, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH);
+      return;
+    }
+
+    const w = Math.max(1, Math.ceil(dstW));
+    const h = Math.max(1, Math.ceil(dstH));
+
+    // Grow the scratch buffer if this sprite is bigger than what we have.
+    if (tintCanvas.width < w || tintCanvas.height < h) {
+      tintCanvas.width  = Math.max(tintCanvas.width,  w);
+      tintCanvas.height = Math.max(tintCanvas.height, h);
+    }
+
+    tintCtx.clearRect(0, 0, w, h);
+    tintCtx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, w, h);
+
+    // source-atop = paint only where the sprite already has alpha
+    tintCtx.globalCompositeOperation = 'source-atop';
+    tintCtx.fillStyle = washColor;
+    tintCtx.fillRect(0, washTop, w, washH);
+    tintCtx.globalCompositeOperation = 'source-over';
+
+    ctx.drawImage(tintCanvas, 0, 0, w, h, dstX, dstY, w, h);
+  }
+
+  /**
+   * Render Layer 5: Entities & Props with Oblique 2.5D Stacking & Alpha-Aware Foot Wash
    */
   function renderEntitiesLayer(targetCtx, timeSec) {
     // 1. Gather all dynamic renderables (Props + Player)
@@ -2565,6 +2605,14 @@
       const img = assets[ent.asset];
       const isReady = img && img.complete && img.naturalWidth > 0;
 
+      const onBridge = ent.isPlayer && (Math.hypot(ent.x - 920, ent.y - 450) < 36);
+
+      // How much of the sprite's bottom is underwater, in destination pixels
+      let washH = 0;
+      if (isSubmerged && !ent.isSwimmer && !onBridge) {
+        washH = Math.min(16, (ELEV_SHALLOW_WATER - footElev) * 60 + 6);
+      }
+
       if (isReady) {
         // Sprite sheet frame slicing
         let srcX = ent.frameX || 0;
@@ -2576,10 +2624,15 @@
           srcY = ent.dir * ent.frameHeight;
         }
 
-        targetCtx.drawImage(
-          img,
+        // Wash band is anchored to the *bottom of the rendered sprite*, not ent.y
+        const washTop = ent.renderHeight - washH;
+
+        drawSpriteWithWash(
+          targetCtx, img,
           srcX, srcY, ent.frameWidth, ent.frameHeight,
-          screenX, screenY + offsetY, ent.renderWidth, ent.renderHeight
+          screenX, screenY + offsetY, ent.renderWidth, ent.renderHeight,
+          washTop, washH,
+          'rgba(6, 182, 212, 0.48)'
         );
       } else {
         // Procedural 2.5D Fallback Placeholder Graphic
@@ -2587,18 +2640,10 @@
       }
 
       // -------------------------------------------------------------
-      // Submerged Foot Wash & Ripple Effect (when standing in water)
+      // Submerged Foot Ripple Effect (when standing in water)
       // -------------------------------------------------------------
-      const onBridge = ent.isPlayer && (Math.hypot(ent.x - 920, ent.y - 450) < 36);
-      if (isSubmerged && !ent.isSwimmer && !onBridge) {
+      if (washH > 0) {
         targetCtx.save();
-
-        // 1. Water wash tint over submerged lower feet
-        targetCtx.fillStyle = 'rgba(6, 182, 212, 0.48)';
-        const washHeight = Math.min(16, (ELEV_SHALLOW_WATER - footElev) * 60 + 6);
-        targetCtx.fillRect(screenX, ent.y - washHeight, ent.renderWidth, washHeight);
-
-        // 2. Expanding circular wake ripples around submerged feet
         const ripplePhase = (timeSec * 2.5 + ent.x) % (Math.PI * 2);
         const rippleRad = 10 + Math.sin(ripplePhase) * 6;
         const rippleAlpha = Math.max(0, 0.6 - (rippleRad / 18));
@@ -2608,11 +2653,11 @@
         targetCtx.beginPath();
         targetCtx.ellipse(ent.x, ent.y, rippleRad, rippleRad * 0.45, 0, 0, Math.PI * 2);
         targetCtx.stroke();
-
         targetCtx.restore();
       }
     }
   }
+
 
   /**
    * Procedural 2.5D fallback graphics if external WebP sprite is loading
