@@ -6,7 +6,7 @@ import { entities } from '../entities/manifest.js';
 import { player, updatePlayer } from '../entities/player.js';
 import { updateRatNPC } from '../entities/rat-npc.js';
 import { updatePiranhaNPC } from '../entities/piranha-npc.js';
-import { centerCameraOn } from '../render/camera.js';
+import { centerCameraOn, resizeCanvasToViewport } from '../render/camera.js';
 import { renderGroundGrid } from '../terrain/terrain-renderer.js';
 import { renderAllShadows } from '../render/shadows.js';
 import { renderSortedEntities } from '../render/entity-renderer.js';
@@ -59,20 +59,39 @@ export function startEngineLoop(canvas, ctx) {
       centerCameraOn(player.x + 32, player.y + 32);
     }
 
+    // Ensure canvas matches viewport size
+    resizeCanvasToViewport(canvas);
+
+    const zoom = editorState.currentZoom || 1.0;
+    const wrapper = document.getElementById('canvas-wrapper');
+    const scrollX = wrapper ? Math.round(wrapper.scrollLeft) : 0;
+    const scrollY = wrapper ? Math.round(wrapper.scrollTop) : 0;
+    const cameraX = scrollX / zoom;
+    const cameraY = scrollY / zoom;
+    const viewW = canvas.width / zoom;
+    const viewH = canvas.height / zoom;
+    const camera = { x: cameraX, y: cameraY, w: viewW, h: viewH, zoom };
+
     // Clear canvas
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    ctx.save();
+    ctx.scale(zoom, zoom);
+    ctx.translate(-Math.round(cameraX), -Math.round(cameraY));
+
     // 1. Draw Background Ground Tiles
-    renderGroundGrid(ctx, canvas, now);
+    renderGroundGrid(ctx, canvas, now, camera);
 
     // 2. Draw Directional Silhouette Shadows (on top of terrain, under all items)
     if (debug.shadows) {
-      renderAllShadows(ctx, now);
+      renderAllShadows(ctx, now, camera);
     }
 
     // 3. Draw Depth-Sorted Entities (Props, NPCs, Player)
-    renderSortedEntities(ctx, now);
+    renderSortedEntities(ctx, now, camera);
+
+    ctx.restore();
 
     requestAnimationFrame(gameLoop);
   }

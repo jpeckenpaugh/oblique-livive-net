@@ -8,7 +8,7 @@ A lightweight, standalone HTML5 Canvas oblique/cabinet 2.5D sandbox engine runni
 
 The sandbox demonstrates **oblique 2.5D rendering** on a strictly orthogonal $(x, y)$ square tile grid—avoiding the mathematical complexity and coordinate rotation of 45-degree diamond isometric projections while achieving convincing depth, occlusion, and vertical layering.
 
-* **Orthogonal Square Grid**: 64×64 pixel tiles across a 30×24 world canvas ($1920 \times 1536$ px).
+* **Orthogonal Square Grid**: 64×64 pixel tiles across a 64×64 world grid ($4,096 \times 4,096$ px) with high-performance viewport culling.
 * **Vertical Sprite Stacking**: Sprites are taller than their ground footprint (e.g. 128×128 or 256×256 px). Anchors register at bottom-center so feet sit flush in the current tile while bodies naturally overlap the tile row above.
 * **Continuous Y-Depth Sorting**: Entities and props are dynamically depth-sorted by their foot baseline ($Y + \text{height}$) every frame.
 * **Zero External Dependencies**: Self-contained vanilla JavaScript running natively in any modern browser.

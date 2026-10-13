@@ -10,8 +10,8 @@ import {
 import { debug } from '../core/state.js';
 import { assets, isAssetReady } from '../core/assets.js';
 import { entities } from '../entities/manifest.js';
-import { player } from '../entities/player.js';
-import { getRatLookFrame } from '../entities/rat-npc.js';
+import { player, getPlayerFrameCoords } from '../entities/player.js';
+import { getRatFrameCoords } from '../entities/rat-npc.js';
 
 // Reusable offscreen scratch canvas for rendering directional silhouette shadows
 const shadowCanvas = document.createElement('canvas');
@@ -85,17 +85,26 @@ export function drawObjectSilhouetteShadow(
  * Render all scene shadows (placed on top of terrain, under all props & characters).
  * @param {CanvasRenderingContext2D} ctx Destination canvas 2D context
  * @param {number} now Timestamp in ms
+ * @param {Object} camera Viewport bounds
  */
-export function renderAllShadows(ctx, now) {
+export function renderAllShadows(ctx, now, camera) {
   const nowSec = (now || 0) * 0.001;
+  const viewLeft = camera ? camera.x - 300 : -10000;
+  const viewTop = camera ? camera.y - 300 : -10000;
+  const viewRight = camera ? camera.x + camera.w + 300 : 100000;
+  const viewBottom = camera ? camera.y + camera.h + 300 : 100000;
 
   // 1. Static Props & NPC Shadows
   for (const ent of entities) {
+    const rw = ent.renderWidth || ent.frameWidth || 128;
+    const rh = ent.renderHeight || ent.frameHeight || 128;
+    if (ent.x + rw < viewLeft || ent.x > viewRight ||
+        ent.y + rh < viewTop || ent.y > viewBottom) {
+      continue;
+    }
     const img = assets[ent.asset];
     const fw = ent.frameWidth || 128;
     const fh = ent.frameHeight || 128;
-    const rw = ent.renderWidth || fw;
-    const rh = ent.renderHeight || fh;
     const anchorX = ent.anchorX !== undefined ? ent.anchorX : rw / 2;
     const anchorY = ent.anchorY !== undefined ? ent.anchorY : (ent.anchorPreset === 'center' ? rh / 2 : rh);
     const isCenter = ent.anchorPreset === 'center';
@@ -133,22 +142,9 @@ export function renderAllShadows(ctx, now) {
     let srcX = ent.frameX || 0;
     let srcY = ent.frameY || 0;
     if (ent.type === 'npc' && ent.npcType === 'rat') {
-      if (ent.wanderState === 'walking') {
-        const frameIndex = Math.floor(ent.animTime * (ent.fps || 8)) % 8;
-        srcX = frameIndex * fw;
-        srcY = ent.dir * fh;
-      } else if (ent.wanderState === 'look_right') {
-        const look = getRatLookFrame(ent.dir, 'right');
-        srcX = look.col * fw;
-        srcY = look.row * fh;
-      } else if (ent.wanderState === 'look_left') {
-        const look = getRatLookFrame(ent.dir, 'left');
-        srcX = look.col * fw;
-        srcY = look.row * fh;
-      } else {
-        srcX = 0;
-        srcY = ent.dir * fh;
-      }
+      const coords = getRatFrameCoords(ent);
+      srcX = coords.srcX;
+      srcY = coords.srcY;
     }
 
     drawObjectSilhouetteShadow(ctx, img, srcX, srcY, fw, fh, rw, rh, Gx, Gy, localX, localY, isCenter);
@@ -180,10 +176,7 @@ export function renderAllShadows(ctx, now) {
 
   const pLocalX = pScreenX - pGx;
   const pLocalY = pScreenY - pGy;
-
-  const pFrameIndex = p.isMoving ? Math.floor(p.animTime * p.fps) % p.totalWalkFrames : 0;
-  const pSrcX = pFrameIndex * pFw;
-  const pSrcY = p.dir * pFh;
+  const { srcX: pSrcX, srcY: pSrcY } = getPlayerFrameCoords(p);
 
   drawObjectSilhouetteShadow(ctx, pImg, pSrcX, pSrcY, pFw, pFh, pRw, pRh, pGx, pGy, pLocalX, pLocalY, pIsCenter);
 }

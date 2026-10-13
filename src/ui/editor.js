@@ -93,10 +93,12 @@ export function initEditor(canvas) {
     if (editorState.activeBrush !== null) return;
 
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const clickX = (e.clientX - rect.left) * scaleX;
-    const clickY = (e.clientY - rect.top) * scaleY;
+    const wrapper = document.getElementById('canvas-wrapper');
+    const zoom = editorState.currentZoom || 1.0;
+    const cameraX = wrapper ? wrapper.scrollLeft / zoom : 0;
+    const cameraY = wrapper ? wrapper.scrollTop / zoom : 0;
+    const clickX = cameraX + (e.clientX - rect.left) / zoom;
+    const clickY = cameraY + (e.clientY - rect.top) / zoom;
 
     const hitCandidates = [];
 

@@ -6,10 +6,12 @@ import { DEFAULT_TERRAIN_MAP, PURE_GRASS_TERRAIN_MAP, DIRT_TRAIL_TERRAIN_MAP } f
 export const debug = {
   snapToGrid: true,
   cameraFollow: true,
-  grid: true,
-  hitbox: true,
-  anchor: true,
-  bounds: true,
+  turnSmoothing: true,
+  turnStepDuration: 0.05,
+  grid: false,
+  hitbox: false,
+  anchor: false,
+  bounds: false,
   collision: true,
   waterSolid: true,
   shadows: true,
@@ -23,7 +25,7 @@ export const grassParams = {
   seamSmudge: 12        // Cross-tile bleed & seam blade smudge in pixels (0 to 24)
 };
 
-// 30x24 mutable 2D terrain grid
+// 64x64 mutable 2D terrain grid
 export let terrainMap = DEFAULT_TERRAIN_MAP.map(row => [...row]);
 
 // Active terrain painter brush: null = Play Mode, 0 = Grass, 1 = Dirt, 2 = Water, 3 = Sand

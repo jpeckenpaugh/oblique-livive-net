@@ -508,6 +508,9 @@
         <label style="display: flex; align-items: center; gap: 4px; font-size: 0.72rem; cursor: pointer; color: #cbd5e1;">
           <input type="checkbox" id="chk-grid" style="accent-color: var(--accent);"> 64px Grid
         </label>
+        <label style="display: flex; align-items: center; gap: 4px; font-size: 0.72rem; cursor: pointer; color: #cbd5e1;">
+          <input type="checkbox" id="chk-shadows" checked style="accent-color: #a855f7;"> Shadows
+        </label>
       </div>
 
       <div id="toast">Substrate re-baked successfully</div>
@@ -741,6 +744,14 @@
       l3: true, // Biome / Grass Field (Vegetation Carpet - Cleared)
       l4: true, // Flowing Water & Ocean Swells
       l5: true  // Entities & 2.5D Props
+    },
+    // Directional Ground Shadows (matching root demo)
+    shadows: {
+      enabled: true,
+      shearX: 0.19,
+      scaleY: 0.52,
+      color: 'rgba(20, 28, 40, 0.40)',
+      feather: 0.40
     },
     // Water Simulation
     water: {
@@ -1304,6 +1315,12 @@
   tintCanvas.width = 256;
   tintCanvas.height = 256;
   const tintCtx = tintCanvas.getContext('2d');
+
+  // Reusable offscreen scratch canvas for rendering directional silhouette shadows
+  const shadowCanvas = document.createElement('canvas');
+  shadowCanvas.width = 256;
+  shadowCanvas.height = 256;
+  const shadowCtx = shadowCanvas.getContext('2d');
 
   let lastWaterEvalNow = 0;
   const WATER_UPDATE_INTERVAL_MS = 100; // 10 FPS (100ms evaluation interval)
@@ -2544,6 +2561,14 @@
     }
 
     // -------------------------------------------------------------
+    // PASS 1.5: DIRECTIONAL SILHOUETTE SHADOWS
+    // Cast on top of terrain substrates (L1–L3), under water (L4) & entities (L5)
+    // -------------------------------------------------------------
+    if (config.shadows.enabled && config.layers.l5) {
+      renderAllShadows(ctx, timeSec);
+    }
+
+    // -------------------------------------------------------------
     // PASS 2: DYNAMIC FLOWING WATER & OCEAN SWELLS (Layer 4)
     // Evaluated strictly 10 times per second (10 FPS retro cadence) at 1/6x tranquil speed
     // -------------------------------------------------------------
@@ -2756,6 +2781,142 @@
     }
 
     targetCtx.restore();
+  }
+
+  /**
+   * Directional Silhouette Shadow Rasterizer.
+   * Shears, squashes, and projects dark object silhouettes onto the ground with baseline feathering.
+   */
+  function drawObjectSilhouetteShadow(
+    ctx,
+    img,
+    srcX,
+    srcY,
+    fw,
+    fh,
+    rw,
+    rh,
+    Gx,
+    Gy,
+    localX,
+    localY,
+    isCenterAnchor
+  ) {
+    if (!img || !img.complete || img.naturalWidth === 0) return;
+
+    if (shadowCanvas.width < fw || shadowCanvas.height < fh) {
+      shadowCanvas.width = Math.max(shadowCanvas.width, fw);
+      shadowCanvas.height = Math.max(shadowCanvas.height, fh);
+    }
+
+    // Step 1: Draw source frame onto shadow scratch canvas
+    shadowCtx.clearRect(0, 0, fw, fh);
+    shadowCtx.drawImage(img, srcX, srcY, fw, fh, 0, 0, fw, fh);
+
+    // Step 2: Mask with uniform dark grey silhouette & feather in the contact baseline
+    shadowCtx.globalCompositeOperation = 'source-in';
+
+    const featherRatio = config.shadows.feather !== undefined ? config.shadows.feather : 0.40;
+    const shadowColor = config.shadows.color || 'rgba(20, 28, 40, 0.40)';
+    if (featherRatio > 0.005) {
+      // Vertical gradient feathering across the contact baseline
+      const grad = shadowCtx.createLinearGradient(0, 0, 0, fh);
+      const contactStop = isCenterAnchor ? 0.72 : 1.0;
+      const fadeStartStop = Math.max(0.05, contactStop - featherRatio);
+
+      grad.addColorStop(0.0, shadowColor);
+      grad.addColorStop(fadeStartStop, shadowColor);
+      grad.addColorStop(contactStop, 'rgba(20, 28, 40, 0.00)');
+      if (contactStop < 1.0) {
+        grad.addColorStop(1.0, 'rgba(20, 28, 40, 0.00)');
+      }
+
+      shadowCtx.fillStyle = grad;
+    } else {
+      shadowCtx.fillStyle = shadowColor;
+    }
+
+    shadowCtx.fillRect(0, 0, fw, fh);
+    shadowCtx.globalCompositeOperation = 'source-over';
+
+    // Step 3: Draw transformed silhouette onto the ground plane (sheared & tilted 20° CCW)
+    ctx.save();
+    ctx.translate(Gx, Gy);
+    ctx.transform(1, 0, config.shadows.shearX, config.shadows.scaleY, 0, 0);
+    ctx.drawImage(shadowCanvas, 0, 0, fw, fh, localX, localY, rw, rh);
+    ctx.restore();
+  }
+
+  /**
+   * Render all scene shadows (placed on top of terrain substrates, under props & characters).
+   */
+  function renderAllShadows(targetCtx, timeSec) {
+    // 1. Static Props & NPC Shadows
+    for (const ent of entities) {
+      if (ent.isCampfire || ent.isBridge) continue;
+
+      const rw = ent.renderWidth || ent.frameWidth || 128;
+      const rh = ent.renderHeight || ent.frameHeight || 128;
+      const anchorX = ent.anchorX !== undefined ? ent.anchorX : rw / 2;
+      const anchorY = ent.anchorY !== undefined ? ent.anchorY : rh;
+
+      // Piranha NPCs cast soft, diffused underwater shadows directly on the seabed
+      if (ent.isSwimmer || ent.asset === 'piranha') {
+        targetCtx.save();
+        const bob = Math.sin((timeSec * 3.2) + (ent.phase || 0)) * 2;
+        targetCtx.fillStyle = 'rgba(10, 24, 60, 0.35)';
+        targetCtx.beginPath();
+        targetCtx.ellipse(ent.x, ent.y + 12 - bob, rw * 0.28, rh * 0.12, 0, 0, Math.PI * 2);
+        targetCtx.fill();
+        targetCtx.restore();
+        continue;
+      }
+
+      const img = assets[ent.asset];
+      if (!img || !img.complete || img.naturalWidth === 0) continue;
+
+      const fw = ent.frameWidth || 128;
+      const fh = ent.frameHeight || 128;
+
+      const screenX = Math.round(ent.x - anchorX);
+      const screenY = Math.round(ent.y - anchorY);
+      const Gx = screenX + anchorX;
+      const contactOffset = ent.id === 'house' ? 12 : (ent.asset === 'palm' ? 8 : 4);
+      const Gy = screenY + anchorY - contactOffset;
+
+      const localX = screenX - Gx;
+      const localY = screenY - Gy;
+
+      const srcX = ent.frameX || 0;
+      const srcY = ent.frameY || 0;
+
+      drawObjectSilhouetteShadow(targetCtx, img, srcX, srcY, fw, fh, rw, rh, Gx, Gy, localX, localY, false);
+    }
+
+    // 2. Player Shadow
+    const pImg = assets['player'];
+    if (pImg && pImg.complete && pImg.naturalWidth > 0) {
+      const pFw = player.frameWidth;
+      const pFh = player.frameHeight;
+      const pRw = player.renderWidth || pFw;
+      const pRh = player.renderHeight || pFh;
+      const pAnchorX = player.anchorX;
+      const pAnchorY = player.anchorY;
+
+      const pScreenX = Math.round(player.x - pAnchorX);
+      const pScreenY = Math.round(player.y - pAnchorY);
+      const pGx = pScreenX + pAnchorX;
+      const pGy = pScreenY + pAnchorY - 6; // Soles of shoes
+
+      const pLocalX = pScreenX - pGx;
+      const pLocalY = pScreenY - pGy;
+
+      const pFrameIndex = player.walking ? Math.floor(player.animTime * 10) % 8 : 0;
+      const pSrcX = pFrameIndex * pFw;
+      const pSrcY = player.dir * pFh;
+
+      drawObjectSilhouetteShadow(targetCtx, pImg, pSrcX, pSrcY, pFw, pFh, pRw, pRh, pGx, pGy, pLocalX, pLocalY, false);
+    }
   }
 
   /**
@@ -3379,6 +3540,11 @@
   // Grid Debug Checkbox
   document.getElementById('chk-grid').addEventListener('change', (e) => {
     config.debug.showGrid = e.target.checked;
+  });
+
+  // Shadows Checkbox
+  document.getElementById('chk-shadows').addEventListener('change', (e) => {
+    config.shadows.enabled = e.target.checked;
   });
 
   // Viewport Zoom & Camera Controls

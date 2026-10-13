@@ -14,17 +14,19 @@
     <div id="top-bar">
       <div class="title-group">
         <h1>2.5D Oblique Sprite Stacking Sandbox</h1>
-        <p>30×24 Expanded World (4× Area) • 64×64 Footprints • Dynamic Y-Sorting Depth</p>
+        <p>64×64 Centered World (4,096×4,096 px) • 64×64 Footprints • Dynamic Y-Sorting Depth</p>
       </div>
       <div class="hud-stats">
         <div class="stat-pill" id="stat-fps">FPS: 60</div>
-        <div class="stat-pill" id="stat-player-tile">Tile: (8, 5)</div>
+        <div class="stat-pill" id="stat-player-tile">Tile: (24, 26)</div>
         <div class="stat-pill" id="stat-depth-count">Renderables: 15</div>
       </div>
     </div>
 
     <div id="canvas-wrapper">
-      <canvas id="gameCanvas" width="1920" height="1536"></canvas>
+      <div id="world-sizer">
+        <canvas id="gameCanvas"></canvas>
+      </div>
     </div>
   </div>
 
@@ -49,23 +51,27 @@
           <span>Snap to Grid Movement (1 Tile per Step)</span>
         </label>
         <label class="checkbox-item">
+          <input type="checkbox" id="chk-turn-pivot" checked>
+          <span>Turn Pivot Animation (12-Angle Turntable)</span>
+        </label>
+        <label class="checkbox-item">
           <input type="checkbox" id="chk-camera-follow" checked>
           <span>Auto-Center Camera on Player</span>
         </label>
         <label class="checkbox-item">
-          <input type="checkbox" id="chk-grid" checked>
+          <input type="checkbox" id="chk-grid">
           <span>Show Grid Lines</span>
         </label>
         <label class="checkbox-item">
-          <input type="checkbox" id="chk-hitbox" checked>
+          <input type="checkbox" id="chk-hitbox">
           <span><span class="color-legend" style="background: #ef4444;"></span>64×64 Footprint Hitboxes</span>
         </label>
         <label class="checkbox-item">
-          <input type="checkbox" id="chk-anchor" checked>
+          <input type="checkbox" id="chk-anchor">
           <span><span class="color-legend" style="background: #eab308;"></span>Registration Anchor Crosshair</span>
         </label>
         <label class="checkbox-item">
-          <input type="checkbox" id="chk-bounds" checked>
+          <input type="checkbox" id="chk-bounds">
           <span><span class="color-legend" style="background: #06b6d4;"></span>Sprite Bounding Boxes</span>
         </label>
         <label class="checkbox-item">
@@ -122,12 +128,12 @@
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
           <div>
-            <label>Tile X (Col 0..29)</label>
-            <input type="number" id="ed-tile-x" min="0" max="29" style="width: 100%;">
+            <label>Tile X (Col 0..63)</label>
+            <input type="number" id="ed-tile-x" min="0" max="63" style="width: 100%;">
           </div>
           <div>
-            <label>Tile Y (Row 0..23)</label>
-            <input type="number" id="ed-tile-y" min="0" max="23" style="width: 100%;">
+            <label>Tile Y (Row 0..63)</label>
+            <input type="number" id="ed-tile-y" min="0" max="63" style="width: 100%;">
           </div>
         </div>
 
@@ -296,10 +302,10 @@
       <div class="section-title">Scene Props & NPCs</div>
       <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.5;">
         <div style="margin-bottom: 6px;">• <strong>Towering Palm Trees (x4)</strong>: 256×256 towering trees (anchored at trunk base, canopies overlap tiles above)</div>
-        <div style="margin-bottom: 6px;">• <strong>Fisher's Cottage</strong>: Tiles (2, 2) to (3, 3) — 256×256 sprite (double size, 4-tile solid footprint)</div>
-        <div style="margin-bottom: 6px;">• <strong>Barrels (x3)</strong>: Tucked under the cottage eaves (Tiles 1,1 & 4,1) + trail barrel (5,6)</div>
-        <div style="margin-bottom: 6px;">• <strong>Brown River Rat</strong>: Tile (7, 8) — 128×128 quadruped with autonomous wandering & head turning</div>
-        <div style="margin-bottom: 6px;">• <strong>Black Rat NPC</strong>: Tile (1, 5) — 76×76 (60% scale) agile black rat created by shading the regular rat bitmap</div>
+        <div style="margin-bottom: 6px;">• <strong>Fisher's Cottage</strong>: Tiles (22, 24) to (23, 25) — 256×256 sprite (double size, 4-tile solid footprint)</div>
+        <div style="margin-bottom: 6px;">• <strong>Barrels (x3)</strong>: Cottage eaves (Tiles 21,24 & 24,23) + trail barrel (22,26)</div>
+        <div style="margin-bottom: 6px;">• <strong>Brown River Rat</strong>: Tile (26, 28) — 128×128 quadruped with autonomous wandering & head turning</div>
+        <div style="margin-bottom: 6px;">• <strong>Black Rat NPC</strong>: Tile (20, 28) — 76×76 (60% scale) agile black rat created by shading the regular rat bitmap</div>
         <div style="margin-bottom: 6px;">• <strong>Directional Silhouette Shadows</strong>: Sheared 20° CCW to the left from east sun, cast flat on terrain under all props & characters</div>
       </div>
     </div>

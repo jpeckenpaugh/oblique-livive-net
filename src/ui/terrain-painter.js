@@ -49,10 +49,12 @@ export function initTerrainPainter(canvas) {
   function paintAtEvent(e) {
     if (editorState.activeBrush === null) return;
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const canvasX = (e.clientX - rect.left) * scaleX;
-    const canvasY = (e.clientY - rect.top) * scaleY;
+    const wrapper = document.getElementById('canvas-wrapper');
+    const zoom = editorState.currentZoom || 1.0;
+    const cameraX = wrapper ? wrapper.scrollLeft / zoom : 0;
+    const cameraY = wrapper ? wrapper.scrollTop / zoom : 0;
+    const canvasX = cameraX + (e.clientX - rect.left) / zoom;
+    const canvasY = cameraY + (e.clientY - rect.top) / zoom;
     const tx = Math.floor(canvasX / TILE_SIZE);
     const ty = Math.floor(canvasY / TILE_SIZE);
     if (tx >= 0 && tx < GRID_COLS && ty >= 0 && ty < GRID_ROWS) {

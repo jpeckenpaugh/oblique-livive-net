@@ -5,8 +5,8 @@ import { TILE_SIZE } from '../core/constants.js';
 import { editorState } from '../core/state.js';
 import { assets, isAssetReady, getShadedBlackRatCanvas } from '../core/assets.js';
 import { entities } from '../entities/manifest.js';
-import { player } from '../entities/player.js';
-import { getRatLookFrame } from '../entities/rat-npc.js';
+import { player, getPlayerFrameCoords } from '../entities/player.js';
+import { getRatFrameCoords } from '../entities/rat-npc.js';
 import { drawEntitySelectionOverlay, drawDebugVisuals } from './debug-renderer.js';
 
 /**
@@ -44,22 +44,9 @@ export function renderEntitySprite(ctx, ent, now) {
 
   if (ent.type === 'npc') {
     if (ent.npcType === 'rat') {
-      if (ent.wanderState === 'walking') {
-        const frameIndex = Math.floor(ent.animTime * (ent.fps || 8)) % 8;
-        srcX = frameIndex * fw;
-        srcY = ent.dir * fh;
-      } else if (ent.wanderState === 'look_right') {
-        const look = getRatLookFrame(ent.dir, 'right');
-        srcX = look.col * fw;
-        srcY = look.row * fh;
-      } else if (ent.wanderState === 'look_left') {
-        const look = getRatLookFrame(ent.dir, 'left');
-        srcX = look.col * fw;
-        srcY = look.row * fh;
-      } else {
-        srcX = 0;
-        srcY = ent.dir * fh;
-      }
+      const coords = getRatFrameCoords(ent);
+      srcX = coords.srcX;
+      srcY = coords.srcY;
     } else if (ent.npcType === 'piranha') {
       srcX = ent.frameX || 0;
       srcY = ent.frameY || 0;
@@ -70,14 +57,7 @@ export function renderEntitySprite(ctx, ent, now) {
   if (isAssetReady(img)) {
     if (ent.tint === 'black') {
       const shadedRat = getShadedBlackRatCanvas(img);
-      if (shadedRat) {
-        ctx.drawImage(shadedRat, srcX, srcY, fw, fh, screenX, screenY, rw, rh);
-      } else {
-        ctx.save();
-        ctx.filter = 'grayscale(100%) brightness(0.38) contrast(1.3)';
-        ctx.drawImage(img, srcX, srcY, fw, fh, screenX, screenY, rw, rh);
-        ctx.restore();
-      }
+      ctx.drawImage(shadedRat || img, srcX, srcY, fw, fh, screenX, screenY, rw, rh);
     } else {
       ctx.drawImage(img, srcX, srcY, fw, fh, screenX, screenY, rw, rh);
     }
@@ -144,10 +124,8 @@ export function renderPlayerSprite(ctx, footX, footY, now) {
     screenY = Math.round(footY + p.height - anchorY);
   }
 
-  // Frame selection:
-  const frameIndex = p.isMoving ? Math.floor(p.animTime * p.fps) % p.totalWalkFrames : 0;
-  const srcX = frameIndex * fw;
-  const srcY = p.dir * fh;
+  // Frame selection (synchronized across walking cycles and 12-angle turntable poses):
+  const { srcX, srcY } = getPlayerFrameCoords(p);
 
   if (isAssetReady(img)) {
     ctx.drawImage(img, srcX, srcY, fw, fh, screenX, screenY, rw, rh);
@@ -172,12 +150,25 @@ export function renderPlayerSprite(ctx, footX, footY, now) {
 
 /**
  * Gather all renderable entities, sort continuously by foot Y-depth, and render bottom-to-top.
+ * @param {CanvasRenderingContext2D} ctx 
+ * @param {number} now 
+ * @param {Object} camera Viewport bounds
  */
-export function renderSortedEntities(ctx, now) {
+export function renderSortedEntities(ctx, now, camera) {
   const renderList = [];
+  const viewLeft = camera ? camera.x - 300 : -10000;
+  const viewTop = camera ? camera.y - 300 : -10000;
+  const viewRight = camera ? camera.x + camera.w + 300 : 100000;
+  const viewBottom = camera ? camera.y + camera.h + 300 : 100000;
 
   // Add static props and NPCs
   for (const ent of entities) {
+    const rw = ent.renderWidth || ent.frameWidth || 128;
+    const rh = ent.renderHeight || ent.frameHeight || 128;
+    if (ent.x + rw < viewLeft || ent.x > viewRight ||
+        ent.y + rh < viewTop || ent.y > viewBottom) {
+      continue;
+    }
     renderList.push({
       entity: ent,
       footX: ent.x,
@@ -187,13 +178,16 @@ export function renderSortedEntities(ctx, now) {
   }
 
   // Add Player
-  renderList.push({
-    entity: player,
-    isPlayer: true,
-    footX: player.x,
-    footY: player.y,
-    depthY: player.y + player.height
-  });
+  if (player.x + 128 >= viewLeft && player.x <= viewRight &&
+      player.y + 128 >= viewTop && player.y <= viewBottom) {
+    renderList.push({
+      entity: player,
+      isPlayer: true,
+      footX: player.x,
+      footY: player.y,
+      depthY: player.y + player.height
+    });
+  }
 
   // Continuous Y-Sorting (Lowest Y rendered first, Highest Y rendered last on top)
   renderList.sort((a, b) => a.depthY - b.depthY);

@@ -19,9 +19,15 @@ export function computeGrassFlowBuffer({
   const amp = grassParams.meanderAmp;
   const buffer = new Uint8ClampedArray(FLOW_W * FLOW_H * 4);
 
+  const worldW = GRID_COLS * TILE_SIZE;
+  const worldH = GRID_ROWS * TILE_SIZE;
+  const stepX = worldW / FLOW_W;
+  const stepY = worldH / FLOW_H;
+  const worldMaxDim = Math.max(worldW, worldH);
+
   let idx = 0;
   for (let sy = 0; sy < FLOW_H; sy++) {
-    const wy = sy * 4;
+    const wy = sy * stepY;
     const r = Math.floor(wy / TILE_SIZE);
 
     // Out-of-sync vertical / rolling waves
@@ -29,10 +35,10 @@ export function computeGrassFlowBuffer({
     const w2 = Math.cos(wy * 0.0135 * fScale + 3.41) * (amp * 0.55);
 
     for (let sx = 0; sx < FLOW_W; sx++) {
-      const wx = sx * 4;
+      const wx = sx * stepX;
       const c = Math.floor(wx / TILE_SIZE);
 
-      if (r < 0 || r >= GRID_ROWS || c < 0 || c >= GRID_COLS || terrainMap[r][c] !== TERRAIN_GRASS) {
+      if (r < 0 || r >= GRID_ROWS || c < 0 || c >= GRID_COLS || !terrainMap[r] || terrainMap[r][c] !== TERRAIN_GRASS) {
         buffer[idx + 3] = 0;
         idx += 4;
         continue;
@@ -47,10 +53,10 @@ export function computeGrassFlowBuffer({
 
       // 30 degree linear projection in warped coordinate space
       const proj30 = px * cos30 + py * sin30;
-      const tLinear = proj30 / 2300;
+      const tLinear = proj30 / (worldMaxDim * 0.9);
 
-      // Large radial forest core (centered at 350, 450)
-      const distInland = Math.hypot(px - 350, py - 450) / 1500;
+      // Large radial forest core
+      const distInland = Math.hypot(px - (worldW * 0.25), py - (worldH * 0.25)) / (worldMaxDim * 0.5);
 
       let factor = Math.min(1, Math.max(0, tLinear * 0.70 + distInland * 0.30));
 

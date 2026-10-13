@@ -112,20 +112,38 @@ export function initControls() {
   const chkSnap = document.getElementById('chk-snap-grid');
   if (chkSnap) chkSnap.addEventListener('change', (e) => debug.snapToGrid = e.target.checked);
 
+  const chkTurnPivot = document.getElementById('chk-turn-pivot');
+  if (chkTurnPivot) {
+    chkTurnPivot.checked = debug.turnSmoothing;
+    chkTurnPivot.addEventListener('change', (e) => debug.turnSmoothing = e.target.checked);
+  }
+
   const chkCamFollow = document.getElementById('chk-camera-follow');
   if (chkCamFollow) chkCamFollow.addEventListener('change', (e) => debug.cameraFollow = e.target.checked);
 
   const chkGrid = document.getElementById('chk-grid');
-  if (chkGrid) chkGrid.addEventListener('change', (e) => debug.grid = e.target.checked);
+  if (chkGrid) {
+    chkGrid.checked = debug.grid;
+    chkGrid.addEventListener('change', (e) => debug.grid = e.target.checked);
+  }
 
   const chkHitbox = document.getElementById('chk-hitbox');
-  if (chkHitbox) chkHitbox.addEventListener('change', (e) => debug.hitbox = e.target.checked);
+  if (chkHitbox) {
+    chkHitbox.checked = debug.hitbox;
+    chkHitbox.addEventListener('change', (e) => debug.hitbox = e.target.checked);
+  }
 
   const chkAnchor = document.getElementById('chk-anchor');
-  if (chkAnchor) chkAnchor.addEventListener('change', (e) => debug.anchor = e.target.checked);
+  if (chkAnchor) {
+    chkAnchor.checked = debug.anchor;
+    chkAnchor.addEventListener('change', (e) => debug.anchor = e.target.checked);
+  }
 
   const chkBounds = document.getElementById('chk-bounds');
-  if (chkBounds) chkBounds.addEventListener('change', (e) => debug.bounds = e.target.checked);
+  if (chkBounds) {
+    chkBounds.checked = debug.bounds;
+    chkBounds.addEventListener('change', (e) => debug.bounds = e.target.checked);
+  }
 
   const chkCollision = document.getElementById('chk-collision');
   if (chkCollision) chkCollision.addEventListener('change', (e) => debug.collision = e.target.checked);
@@ -222,30 +240,39 @@ export function initControls() {
   const btnResetPos = document.getElementById('btn-reset-pos');
   if (btnResetPos) {
     btnResetPos.addEventListener('click', () => {
-      player.tileX = 7;
-      player.tileY = 6;
-      player.startTileX = 7;
-      player.startTileY = 6;
-      player.targetTileX = 7;
-      player.targetTileY = 6;
-      player.x = 7 * TILE_SIZE;
-      player.y = 6 * TILE_SIZE;
+      player.tileX = 24;
+      player.tileY = 26;
+      player.startTileX = 24;
+      player.startTileY = 26;
+      player.targetTileX = 24;
+      player.targetTileY = 26;
+      player.x = 24 * TILE_SIZE;
+      player.y = 26 * TILE_SIZE;
       player.dir = DIR_DOWN;
+      player.facingAngle = 0;
       player.isStepping = false;
       player.isMoving = false;
+      player.isTurning = false;
+      player.turnTimer = 0;
+      player.turnPath = [];
+      player.turnStepIndex = 0;
       player.animTime = 0;
 
       const rat = entities.find(e => e.id === 'river-rat-npc');
       if (rat) {
-        rat.tileX = 9;
-        rat.tileY = 8;
-        rat.startTileX = 9;
-        rat.startTileY = 8;
-        rat.targetTileX = 9;
-        rat.targetTileY = 8;
-        rat.x = 9 * TILE_SIZE;
-        rat.y = 8 * TILE_SIZE;
+        rat.tileX = 26;
+        rat.tileY = 28;
+        rat.startTileX = 26;
+        rat.startTileY = 28;
+        rat.targetTileX = 26;
+        rat.targetTileY = 28;
+        rat.x = 26 * TILE_SIZE;
+        rat.y = 28 * TILE_SIZE;
         rat.dir = DIR_DOWN;
+        rat.facingAngle = 0;
+        rat.turnPath = [];
+        rat.turnTimer = 0;
+        rat.turnStepIndex = 0;
         rat.wanderState = 'idle_center';
         rat.stateTimer = 1.0;
         rat.isStepping = false;
@@ -255,15 +282,19 @@ export function initControls() {
 
       const blackRat = entities.find(e => e.id === 'black-rat-npc');
       if (blackRat) {
-        blackRat.tileX = 3;
-        blackRat.tileY = 8;
-        blackRat.startTileX = 3;
-        blackRat.startTileY = 8;
-        blackRat.targetTileX = 3;
-        blackRat.targetTileY = 8;
-        blackRat.x = 3 * TILE_SIZE;
-        blackRat.y = 8 * TILE_SIZE;
+        blackRat.tileX = 20;
+        blackRat.tileY = 28;
+        blackRat.startTileX = 20;
+        blackRat.startTileY = 28;
+        blackRat.targetTileX = 20;
+        blackRat.targetTileY = 28;
+        blackRat.x = 20 * TILE_SIZE;
+        blackRat.y = 28 * TILE_SIZE;
         blackRat.dir = DIR_RIGHT;
+        blackRat.facingAngle = 90;
+        blackRat.turnPath = [];
+        blackRat.turnTimer = 0;
+        blackRat.turnStepIndex = 0;
         blackRat.wanderState = 'idle_center';
         blackRat.stateTimer = 0.8;
         blackRat.isStepping = false;
@@ -273,14 +304,14 @@ export function initControls() {
 
       const p1 = entities.find(e => e.id === 'piranha-npc-1');
       if (p1) {
-        p1.tileX = 25;
-        p1.tileY = 7;
-        p1.startTileX = 25;
-        p1.startTileY = 7;
-        p1.targetTileX = 25;
-        p1.targetTileY = 7;
-        p1.x = 25 * TILE_SIZE;
-        p1.y = 7 * TILE_SIZE;
+        p1.tileX = 42;
+        p1.tileY = 27;
+        p1.startTileX = 42;
+        p1.startTileY = 27;
+        p1.targetTileX = 42;
+        p1.targetTileY = 27;
+        p1.x = 42 * TILE_SIZE;
+        p1.y = 27 * TILE_SIZE;
         p1.dir = DIR_LEFT;
         p1.isStepping = false;
         p1.wanderState = 'swimming';
@@ -288,14 +319,14 @@ export function initControls() {
 
       const p2 = entities.find(e => e.id === 'piranha-npc-2');
       if (p2) {
-        p2.tileX = 26;
-        p2.tileY = 15;
-        p2.startTileX = 26;
-        p2.startTileY = 15;
-        p2.targetTileX = 26;
-        p2.targetTileY = 15;
-        p2.x = 26 * TILE_SIZE;
-        p2.y = 15 * TILE_SIZE;
+        p2.tileX = 43;
+        p2.tileY = 35;
+        p2.startTileX = 43;
+        p2.startTileY = 35;
+        p2.targetTileX = 43;
+        p2.targetTileY = 35;
+        p2.x = 43 * TILE_SIZE;
+        p2.y = 35 * TILE_SIZE;
         p2.dir = DIR_UP;
         p2.isStepping = false;
         p2.wanderState = 'swimming';

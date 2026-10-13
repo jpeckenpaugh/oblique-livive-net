@@ -36,23 +36,27 @@
 
     #canvas-wrapper {
       flex: 1;
-      display: flex;
-      align-items: flex-start;
-      justify-content: flex-start;
+      display: block;
       overflow: auto;
-      padding: 24px;
-      scroll-behavior: smooth;
+      padding: 0;
+      position: relative;
+    }
+
+    #world-sizer {
+      position: relative;
+      width: 4096px;
+      height: 4096px;
     }
 
     canvas {
+      position: sticky;
+      top: 0;
+      left: 0;
       background-color: #1a1c20;
       box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px #2f343e;
-      border-radius: 4px;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
-      transition: transform 0.15s ease-out;
-      transform-origin: top left;
-      margin: auto;
+      display: block;
     }
 
     /* Top HUD / Controls bar */

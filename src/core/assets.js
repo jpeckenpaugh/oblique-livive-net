@@ -42,9 +42,36 @@ export function getShadedBlackRatCanvas(srcImg) {
   oc.width = srcImg.naturalWidth;
   oc.height = srcImg.naturalHeight;
   const octx = oc.getContext('2d');
-  // Tint bitmap to black: full desaturation, deep shadowing, high contrast
-  octx.filter = 'grayscale(100%) brightness(0.38) contrast(1.3)';
-  octx.drawImage(srcImg, 0, 0);
+
+  try {
+    // 1. Draw base sprite unshaded
+    octx.drawImage(srcImg, 0, 0);
+    // 2. Direct pixel shader for guaranteed cross-browser shading (immune to WebKit ctx.filter bugs)
+    const imgData = octx.getImageData(0, 0, oc.width, oc.height);
+    const d = imgData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] > 0) {
+        const lum = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255;
+        // Deep sleek charcoal/black fur curve with crisp highlight retention
+        const gray = Math.round(Math.pow(lum, 1.2) * 85 + 12);
+        d[i] = gray;
+        d[i + 1] = gray;
+        d[i + 2] = Math.min(255, gray + 4); // subtle cool charcoal sheen
+      }
+    }
+    octx.putImageData(imgData, 0, 0);
+  } catch {
+    // Fallback via standard canvas composite operations if getImageData is restricted
+    octx.clearRect(0, 0, oc.width, oc.height);
+    octx.drawImage(srcImg, 0, 0);
+    octx.globalCompositeOperation = 'multiply';
+    octx.fillStyle = '#28282c';
+    octx.fillRect(0, 0, oc.width, oc.height);
+    octx.globalCompositeOperation = 'destination-in';
+    octx.drawImage(srcImg, 0, 0);
+    octx.globalCompositeOperation = 'source-over';
+  }
+
   shadedBlackRatCanvas = oc;
   return oc;
 }
