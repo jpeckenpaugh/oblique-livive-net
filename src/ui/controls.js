@@ -332,6 +332,26 @@ export function initControls() {
         p2.wanderState = 'swimming';
       }
 
+      const s1 = entities.find(e => e.id === 'shuppy-npc-1');
+      if (s1) {
+        s1.tileX = 22; s1.tileY = 30; s1.startTileX = 22; s1.startTileY = 30; s1.targetTileX = 22; s1.targetTileY = 30;
+        s1.x = 22 * TILE_SIZE; s1.y = 30 * TILE_SIZE; s1.dir = DIR_DOWN; s1.facingAngle = 0; s1.turnPath = []; s1.turnTimer = 0;
+        s1.wanderState = 'idle_center'; s1.stateTimer = 1.2; s1.isStepping = false; s1.isMoving = false; s1.animTime = 0;
+      }
+
+      const pk1 = entities.find(e => e.id === 'picken-npc-1');
+      if (pk1) {
+        pk1.tileX = 29; pk1.tileY = 25; pk1.startTileX = 29; pk1.startTileY = 25; pk1.targetTileX = 29; pk1.targetTileY = 25;
+        pk1.x = 29 * TILE_SIZE; pk1.y = 25 * TILE_SIZE; pk1.dir = DIR_DOWN; pk1.facingAngle = 0; pk1.turnPath = []; pk1.turnTimer = 0;
+        pk1.wanderState = 'idle_center'; pk1.stateTimer = 1.1; pk1.isStepping = false; pk1.isMoving = false; pk1.animTime = 0;
+      }
+
+      const eel1 = entities.find(e => e.id === 'eel-npc-1');
+      if (eel1) {
+        eel1.tileX = 42; eel1.tileY = 33; eel1.startTileX = 42; eel1.startTileY = 33; eel1.targetTileX = 42; eel1.targetTileY = 33;
+        eel1.x = 42 * TILE_SIZE; eel1.y = 33 * TILE_SIZE; eel1.dir = DIR_DOWN; eel1.isStepping = false; eel1.wanderState = 'swimming';
+      }
+
       centerCameraOn(player.x + 32, player.y + 32);
     });
   }

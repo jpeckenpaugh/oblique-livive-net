@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "imageWidth": 622,
+  "imageHeight": 961,
+  "frameWidth": 622,
+  "frameHeight": 961,
+  "columns": 1,
+  "rows": 1,
+  "frameCount": 1,
+  "layout": "single-image",
+  "model": {
+    "name": "Fisherman Hut",
+    "source": "/models/lokarta-private/fisherman_hut_optimized.glb"
+  },
+  "capture": {
+    "mode": "single-sprite",
+    "angleDegrees": 0,
+    "cameraPitchDegrees": 30,
+    "sourceWidth": 1920,
+    "sourceHeight": 1080,
+    "crop": {
+      "x": 649,
+      "y": 119,
+      "width": 622,
+      "height": 961,
+      "paddingPercent": 4
+    },
+    "transparentBackground": true,
+    "pose": "static"
+  },
+  "registrationPoint": {
+    "x": 311,
+    "y": 961,
+    "origin": "top-left",
+    "preset": "bottom-center"
+  },
+  "frames": [
+    {
+      "index": 0,
+      "label": "Sprite 0°",
+      "direction": "single",
+      "directionName": "Single view",
+      "state": "still",
+      "angleDegrees": 0,
+      "frameIndex": 0,
+      "x": 0,
+      "y": 0,
+      "width": 622,
+      "height": 961
+    }
+  ],
+  "image": "fisherman-hut-0deg-single.webp",
+  "encoding": {
+    "format": "WebP",
+    "paletteReduction": "adaptive median cut",
+    "maximumPaletteColors": 256,
+    "losslessAfterPaletteReduction": false,
+    "quality": 1,
+    "encoder": "browser-native",
+    "paletteColorsUsed": 256
+  }
+}

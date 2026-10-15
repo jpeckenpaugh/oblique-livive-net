@@ -36,25 +36,23 @@ export function isTileWalkable(tx, ty, isWaterCreature = false) {
   // Solid obstacle collisions
   for (const ent of entities) {
     if (!ent.solid) continue;
-    if (ent.id === 'house') {
-      // Fisher's cottage footprint: 2x2 tiles
-      if (tx >= ent.tileX && tx < ent.tileX + 2 && ty >= ent.tileY && ty < ent.tileY + 2) {
-        return false;
-      }
-    } else {
-      if (ent.tileX === tx && ent.tileY === ty) {
-        return false;
-      }
+    const spanCols = Math.max(1, Math.round(ent.width / TILE_SIZE));
+    const spanRows = Math.max(1, Math.round(ent.height / TILE_SIZE));
+    if (tx >= ent.tileX && tx < ent.tileX + spanCols &&
+        ty >= ent.tileY && ty < ent.tileY + spanRows) {
+      return false;
     }
   }
 
   const terrain = terrainMap[ty][tx];
 
   if (isWaterCreature) {
-    // Piranhas must stay in water!
-    return terrain === TERRAIN_WATER;
+    // Water creatures (piranhas & eels) must stay in water and cannot cross or walk on docks
+    if (terrain !== TERRAIN_WATER) return false;
+    if (isTileDock(tx, ty)) return false;
+    return true;
   } else {
-    // Land creatures (Player & Rats)
+    // Land creatures (Player & NPCs)
     if (debug.waterSolid && terrain === TERRAIN_WATER) {
       // Wooden dock sections over water are walkable!
       return isTileDock(tx, ty);
@@ -115,7 +113,7 @@ export function checkCollision(targetX, targetY, selfWidth, selfHeight, isWaterC
     for (let ty = minTy; ty <= maxTy; ty++) {
       for (let tx = minTx; tx <= maxTx; tx++) {
         if (isWaterCreature) {
-          if (terrainMap[ty][tx] !== TERRAIN_WATER) return true;
+          if (terrainMap[ty][tx] !== TERRAIN_WATER || isTileDock(tx, ty)) return true;
         } else {
           if (terrainMap[ty][tx] === TERRAIN_WATER && !isTileDock(tx, ty)) {
             return true;

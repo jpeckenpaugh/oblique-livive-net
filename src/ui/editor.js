@@ -2,7 +2,7 @@
  * Interactive In-Sandbox Sprite & Prop Editor.
  * Provides canvas click picking, live frame/anchor adjustment, and 2-way UI synchronization.
  */
-import { TILE_SIZE, GRID_COLS, GRID_ROWS } from '../core/constants.js';
+import { TILE_SIZE, GRID_COLS, GRID_ROWS, DOCK_ELEVATION_OFFSET_Y } from '../core/constants.js';
 import { editorState } from '../core/state.js';
 import { setEntityFrame } from '../core/assets.js';
 import { entities } from '../entities/manifest.js';
@@ -10,10 +10,15 @@ import { player } from '../entities/player.js';
 import { centerCameraOn } from '../render/camera.js';
 
 export function updateFrameLabel(ent) {
+  const isSingleView = (ent.asset === 'house' || ent.asset === 'fisherman-hut' || ent.asset === 'longhouse');
+  const is8Frame = (ent.asset === 'rock-pile' || ent.asset === 'river-eel' || ent.asset === 'palm-tree');
   const idx = ent.frameIndex || 0;
-  const angle = (idx * 30) % 360;
+  const angleStep = is8Frame ? 45 : 30;
+  const angle = (idx * angleStep) % 360;
   const lbl = document.getElementById('ed-frame-label');
-  if (lbl) lbl.textContent = `Frame ${idx} (${angle}°)`;
+  if (lbl) {
+    lbl.textContent = isSingleView ? `Single view (0°)` : `Frame ${idx} (${angle}°)`;
+  }
 }
 
 export function selectEntity(ent) {
@@ -47,10 +52,13 @@ export function selectEntity(ent) {
   if (tileXEl) tileXEl.value = ent.tileX !== undefined ? ent.tileX : Math.floor(ent.x / TILE_SIZE);
   if (tileYEl) tileYEl.value = ent.tileY !== undefined ? ent.tileY : Math.floor(ent.y / TILE_SIZE);
 
-  const maxFrames = (ent.asset === 'rock-pile' ? 8 : 12) - 1;
+  const isSingleView = (ent.asset === 'house' || ent.asset === 'fisherman-hut' || ent.asset === 'longhouse');
+  const is8Frame = (ent.asset === 'rock-pile' || ent.asset === 'river-eel' || ent.asset === 'palm-tree');
+  const maxFrames = isSingleView ? 0 : (is8Frame ? 7 : 11);
   if (frameSlider) {
     frameSlider.max = maxFrames;
     frameSlider.value = ent.frameIndex || 0;
+    frameSlider.disabled = isSingleView;
   }
   updateFrameLabel(ent);
 
@@ -129,6 +137,10 @@ export function initEditor(canvas) {
       } else {
         screenX = Math.round(ent.x + (ent.width / 2) - anchorX);
         screenY = Math.round(ent.y + ent.height - anchorY);
+      }
+
+      if (ent.isDock || ent.asset === 'wooden-dock') {
+        screenY += DOCK_ELEVATION_OFFSET_Y;
       }
 
       const inBounds = (clickX >= screenX && clickX <= screenX + rw && clickY >= screenY && clickY <= screenY + rh);

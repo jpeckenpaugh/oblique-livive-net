@@ -13,7 +13,7 @@ import {
 } from '../core/constants.js';
 import { debug } from '../core/state.js';
 import { isTileWalkable, checkCollision } from './collision.js';
-import { calculateTurnPath } from './player.js';
+import { calculateTurnPath, player } from './player.js';
 
 /**
  * Helper to get Rat turn head angles from Row 4 (Still views).
@@ -210,6 +210,24 @@ export function updateRatNPC(rat, dt) {
     } else if (rat.wanderState === 'idle_center') {
       rat.isMoving = false;
       rat.stateTimer -= dt;
+
+      // Skittish rat startle reflex: if player approaches within 2.5 tiles, scurry away!
+      const pDist = Math.hypot(player.tileX - rat.tileX, player.tileY - rat.tileY);
+      if (pDist <= 2.5) {
+        const dX = rat.tileX - player.tileX;
+        const dY = rat.tileY - player.tileY;
+        const fleeDir = Math.abs(dX) > Math.abs(dY)
+          ? (dX >= 0 ? DIR_RIGHT : DIR_LEFT)
+          : (dY >= 0 ? DIR_DOWN : DIR_UP);
+        let fdx = fleeDir === DIR_RIGHT ? 1 : fleeDir === DIR_LEFT ? -1 : 0;
+        let fdy = fleeDir === DIR_DOWN ? 1 : fleeDir === DIR_UP ? -1 : 0;
+        if (isTileWalkable(rat.tileX + fdx, rat.tileY + fdy, false)) {
+          startRatTurn(rat, DIR_TO_ANGLE[fleeDir], 'walking', fleeDir);
+          rat.stepsRemaining = 2 + Math.floor(Math.random() * 2);
+          return;
+        }
+      }
+
       if (rat.stateTimer <= 0) {
         // Start curiosity sniff cycle: choose random side to look at first
         const cardinalAngle = DIR_TO_ANGLE[rat.dir] || 0;

@@ -105,10 +105,15 @@ export function initAssets() {
   }
 
   loadImage('palm-tree', 'tropical-palm-tree-turntable-palette.webp');
-  loadImage('house', 'fishers-house-turntable-palette.webp');
+  loadImage('house', 'fishers-house-0deg-single.webp');
   loadImage('barrel', 'wooden-barrel-turntable-palette.webp');
   loadImage('wooden-dock', 'wooden-dock-turntable-palette.webp');
   loadImage('fishers-net', 'fishers-net-turntable-palette.webp');
   loadImage('rock-pile', 'rock-pile-turntable-palette.webp');
   loadImage('piranha', 'piranha-turntable-palette.webp');
+  loadImage('river-eel', 'river-eel-turntable-palette.webp');
+  loadImage('shuppy', 'shuppy-walking-armature-unreal-take-baselayer-animation-palette.webp');
+  loadImage('picken', 'pig-chicken-walking-armature-unreal-take-baselayer-animation-palette.webp');
+  loadImage('fisherman-hut', 'fisherman-hut-0deg-single.webp');
+  loadImage('longhouse', 'longhouse-0deg-single.webp');
 }

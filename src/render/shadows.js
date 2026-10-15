@@ -5,7 +5,8 @@
 import {
   SHADOW_SHEAR_X,
   SHADOW_SCALE_Y,
-  SHADOW_COLOR
+  SHADOW_COLOR,
+  DOCK_ELEVATION_OFFSET_Y
 } from '../core/constants.js';
 import { debug } from '../core/state.js';
 import { assets, isAssetReady } from '../core/assets.js';
@@ -119,20 +120,13 @@ export function renderAllShadows(ctx, now, camera) {
       screenX = Math.round(ent.x + (ent.width / 2) - anchorX);
       screenY = Math.round(ent.y + ent.height - anchorY);
       Gx = screenX + anchorX;
-      const contactOffset = ent.id === 'house' ? 12 : (ent.asset === 'palm-tree' ? 8 : 4);
+      const contactOffset = (ent.id === 'house' || ent.asset === 'fisherman-hut' || ent.asset === 'longhouse') ? 12 : (ent.asset === 'palm-tree' ? 8 : 4);
       Gy = screenY + anchorY - contactOffset;
     }
 
-    // Piranha NPCs cast soft, diffused underwater shadows directly on the seabed
-    if (ent.npcType === 'piranha') {
-      ctx.save();
-      const bob = Math.sin((nowSec * 3.2) + (ent.bobOffset || 0)) * 2;
-      ctx.fillStyle = 'rgba(10, 24, 60, 0.35)';
-      ctx.beginPath();
-      ctx.ellipse(screenX + anchorX, screenY + anchorY + 12 - bob, rw * 0.28, rh * 0.12, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      continue;
+    if (ent.isDock || ent.asset === 'wooden-dock') {
+      screenY += DOCK_ELEVATION_OFFSET_Y;
+      Gy += DOCK_ELEVATION_OFFSET_Y;
     }
 
     const localX = screenX - Gx;
@@ -141,13 +135,14 @@ export function renderAllShadows(ctx, now, camera) {
     // Frame selection for NPCs
     let srcX = ent.frameX || 0;
     let srcY = ent.frameY || 0;
-    if (ent.type === 'npc' && ent.npcType === 'rat') {
+    if (ent.type === 'npc' && (ent.npcType === 'rat' || ent.npcType === 'shuppy' || ent.npcType === 'picken')) {
       const coords = getRatFrameCoords(ent);
       srcX = coords.srcX;
       srcY = coords.srcY;
     }
 
-    drawObjectSilhouetteShadow(ctx, img, srcX, srcY, fw, fh, rw, rh, Gx, Gy, localX, localY, isCenter);
+    const isCenterAnchor = isCenter && ent.type !== 'npc';
+    drawObjectSilhouetteShadow(ctx, img, srcX, srcY, fw, fh, rw, rh, Gx, Gy, localX, localY, isCenterAnchor);
   }
 
   // 2. Player Shadow

@@ -1,13 +1,66 @@
 /**
  * Entity & Player sprite renderer with continuous Y-depth sorting.
  */
-import { TILE_SIZE } from '../core/constants.js';
+import { TILE_SIZE, DOCK_ELEVATION_OFFSET_Y } from '../core/constants.js';
 import { editorState } from '../core/state.js';
 import { assets, isAssetReady, getShadedBlackRatCanvas } from '../core/assets.js';
 import { entities } from '../entities/manifest.js';
 import { player, getPlayerFrameCoords } from '../entities/player.js';
 import { getRatFrameCoords } from '../entities/rat-npc.js';
 import { drawEntitySelectionOverlay, drawDebugVisuals } from './debug-renderer.js';
+
+// Reusable scratch canvas for aquatic entities (piranha, eel) to apply feathered water transparency
+const aquaticScratchCanvas = document.createElement('canvas');
+aquaticScratchCanvas.width = 256;
+aquaticScratchCanvas.height = 256;
+const aquaticScratchCtx = aquaticScratchCanvas.getContext('2d');
+
+/**
+ * Render aquatic entities (piranha, eel) with feathered underwater transparency and depth absorption.
+ * Keeps transparent margins untouched (no rectangular color bleed), while fading the lower parts
+ * of the animal from ~80% height down to 0% height (bottom) into the water.
+ */
+export function renderAquaticEntitySprite(ctx, img, srcX, srcY, fw, fh, screenX, screenY, rw, rh) {
+  if (aquaticScratchCanvas.width < fw || aquaticScratchCanvas.height < fh) {
+    aquaticScratchCanvas.width = Math.max(aquaticScratchCanvas.width, fw);
+    aquaticScratchCanvas.height = Math.max(aquaticScratchCanvas.height, fh);
+  }
+
+  // 1. Draw source frame onto scratch canvas
+  aquaticScratchCtx.clearRect(0, 0, fw, fh);
+  aquaticScratchCtx.drawImage(img, srcX, srcY, fw, fh, 0, 0, fw, fh);
+
+  // 2. Subtle underwater color absorption/scatter tint applied strictly to opaque sprite pixels (source-atop)
+  aquaticScratchCtx.globalCompositeOperation = 'source-atop';
+  const tintGrad = aquaticScratchCtx.createLinearGradient(0, 0, 0, fh);
+  tintGrad.addColorStop(0.0, 'rgba(20, 60, 130, 0.0)');
+  tintGrad.addColorStop(0.20, 'rgba(20, 60, 130, 0.0)');
+  tintGrad.addColorStop(0.60, 'rgba(20, 60, 130, 0.18)');
+  tintGrad.addColorStop(1.0, 'rgba(15, 45, 100, 0.32)');
+  aquaticScratchCtx.fillStyle = tintGrad;
+  aquaticScratchCtx.fillRect(0, 0, fw, fh);
+
+  // 3. Feathered fade-to-transparency on the lower parts of the sprite
+  // From 80% of height down to the bottom (0% of height), opacity smoothly diminishes to transparent
+  aquaticScratchCtx.globalCompositeOperation = 'destination-in';
+  const fadeGrad = aquaticScratchCtx.createLinearGradient(0, 0, 0, fh);
+  // Upper portion at water surface (100% to ~80% height): full opacity
+  fadeGrad.addColorStop(0.0, 'rgba(0, 0, 0, 1.0)');
+  fadeGrad.addColorStop(0.20, 'rgba(0, 0, 0, 1.0)');
+  // Lower portion: feathered fade into water depth down to bottom
+  fadeGrad.addColorStop(0.48, 'rgba(0, 0, 0, 0.82)');
+  fadeGrad.addColorStop(0.72, 'rgba(0, 0, 0, 0.44)');
+  fadeGrad.addColorStop(0.90, 'rgba(0, 0, 0, 0.12)');
+  fadeGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+  aquaticScratchCtx.fillStyle = fadeGrad;
+  aquaticScratchCtx.fillRect(0, 0, fw, fh);
+
+  // Restore default composite mode
+  aquaticScratchCtx.globalCompositeOperation = 'source-over';
+
+  // 4. Draw composite onto main scene
+  ctx.drawImage(aquaticScratchCanvas, 0, 0, fw, fh, screenX, screenY, rw, rh);
+}
 
 /**
  * Render a single prop or NPC sprite with anchor offsets and custom shaders.
@@ -31,9 +84,15 @@ export function renderEntitySprite(ctx, ent, now) {
     screenY = Math.round(ent.y + ent.height - anchorY);
   }
 
-  // Piranhas have floating bobbing motion in water
+  // Dock elevation rule: negatively bump dock sprites down 75% of their tile (48px)
+  // so the walking plank deck aligns with the player footstep path across the pier.
+  if (ent.isDock || ent.asset === 'wooden-dock') {
+    screenY += DOCK_ELEVATION_OFFSET_Y;
+  }
+
+  // Piranhas & Eels have floating bobbing motion in water
   let bobY = 0;
-  if (ent.npcType === 'piranha') {
+  if (ent.npcType === 'piranha' || ent.npcType === 'eel') {
     bobY = Math.sin((nowSec * 3.2) + (ent.bobOffset || 0)) * 2.5;
     screenY += Math.round(bobY);
   }
@@ -43,11 +102,11 @@ export function renderEntitySprite(ctx, ent, now) {
   let srcY = ent.frameY || 0;
 
   if (ent.type === 'npc') {
-    if (ent.npcType === 'rat') {
+    if (ent.npcType === 'rat' || ent.npcType === 'shuppy' || ent.npcType === 'picken') {
       const coords = getRatFrameCoords(ent);
       srcX = coords.srcX;
       srcY = coords.srcY;
-    } else if (ent.npcType === 'piranha') {
+    } else if (ent.npcType === 'piranha' || ent.npcType === 'eel') {
       srcX = ent.frameX || 0;
       srcY = ent.frameY || 0;
     }
@@ -58,29 +117,10 @@ export function renderEntitySprite(ctx, ent, now) {
     if (ent.tint === 'black') {
       const shadedRat = getShadedBlackRatCanvas(img);
       ctx.drawImage(shadedRat || img, srcX, srcY, fw, fh, screenX, screenY, rw, rh);
+    } else if (ent.npcType === 'piranha' || ent.npcType === 'eel') {
+      renderAquaticEntitySprite(ctx, img, srcX, srcY, fw, fh, screenX, screenY, rw, rh);
     } else {
       ctx.drawImage(img, srcX, srcY, fw, fh, screenX, screenY, rw, rh);
-    }
-
-    // Half-Submerged Water Effects for Piranha
-    if (ent.npcType === 'piranha') {
-      ctx.save();
-      // 1. Translucent underwater body wash tint (submerges lower 65% of the fish body)
-      ctx.fillStyle = 'rgba(30, 75, 175, 0.45)';
-      ctx.fillRect(screenX, screenY + Math.round(rh * 0.36), rw, Math.round(rh * 0.64));
-
-      // 2. Surface water ripple ellipse surrounding the dorsal water plane
-      const rippleBreath = Math.sin((nowSec * 4.0) + (ent.bobOffset || 0)) * 2.5;
-      ctx.strokeStyle = 'rgba(219, 234, 254, 0.60)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.ellipse(screenX + anchorX, screenY + anchorY + 4, Math.max(10, rw * 0.32 + rippleBreath), Math.max(4, rh * 0.14 + (rippleBreath * 0.4)), 0, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // 3. Specular water caustics / surface foam line
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.50)';
-      ctx.fillRect(screenX + Math.round(rw * 0.18), screenY + Math.round(rh * 0.36), Math.round(rw * 0.64), 1.5);
-      ctx.restore();
     }
   } else {
     // Fallback placeholder
@@ -173,7 +213,7 @@ export function renderSortedEntities(ctx, now, camera) {
       entity: ent,
       footX: ent.x,
       footY: ent.y,
-      depthY: ent.y + ent.height
+      depthY: (ent.isDock || ent.asset === 'wooden-dock') ? ent.y + ent.height - 1 : ent.y + ent.height
     });
   }
 

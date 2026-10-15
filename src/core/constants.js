@@ -62,3 +62,7 @@ export const TURNTABLE_12_FRAMES = [
 export const SHADOW_SHEAR_X = 0.19;
 export const SHADOW_SCALE_Y = 0.52;
 export const SHADOW_COLOR = 'rgba(20, 28, 40, 0.40)';
+
+// Dock Pier Elevation Offset (negatively bumped down 75% of a tile so player walks on top of planks)
+export const DOCK_ELEVATION_OFFSET_Y = Math.round(TILE_SIZE * 0.75); // 48 px
+

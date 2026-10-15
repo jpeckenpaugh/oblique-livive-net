@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "imageWidth": 854,
+  "imageHeight": 959,
+  "frameWidth": 854,
+  "frameHeight": 959,
+  "columns": 1,
+  "rows": 1,
+  "frameCount": 1,
+  "layout": "single-image",
+  "model": {
+    "name": "Fishers House",
+    "source": "/models/lokarta-private/fishers_house_optimized.glb"
+  },
+  "capture": {
+    "mode": "single-sprite",
+    "angleDegrees": 0,
+    "cameraPitchDegrees": 30,
+    "sourceWidth": 1920,
+    "sourceHeight": 1080,
+    "crop": {
+      "x": 533,
+      "y": 121,
+      "width": 854,
+      "height": 959,
+      "paddingPercent": 4
+    },
+    "transparentBackground": true,
+    "pose": "static"
+  },
+  "registrationPoint": {
+    "x": 427,
+    "y": 959,
+    "origin": "top-left",
+    "preset": "bottom-center"
+  },
+  "frames": [
+    {
+      "index": 0,
+      "label": "Sprite 0°",
+      "direction": "single",
+      "directionName": "Single view",
+      "state": "still",
+      "angleDegrees": 0,
+      "frameIndex": 0,
+      "x": 0,
+      "y": 0,
+      "width": 854,
+      "height": 959
+    }
+  ],
+  "image": "fishers-house-0deg-single.webp",
+  "encoding": {
+    "format": "WebP",
+    "paletteReduction": "adaptive median cut",
+    "maximumPaletteColors": 256,
+    "losslessAfterPaletteReduction": false,
+    "quality": 1,
+    "encoder": "browser-native",
+    "paletteColorsUsed": 256
+  }
+}

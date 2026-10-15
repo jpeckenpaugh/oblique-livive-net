@@ -5,7 +5,10 @@ import { debug, editorState } from './state.js';
 import { entities } from '../entities/manifest.js';
 import { player, updatePlayer } from '../entities/player.js';
 import { updateRatNPC } from '../entities/rat-npc.js';
+import { updateShuppyNPC } from '../entities/shuppy-npc.js';
+import { updatePickenNPC } from '../entities/picken-npc.js';
 import { updatePiranhaNPC } from '../entities/piranha-npc.js';
+import { updateEelNPC } from '../entities/eel-npc.js';
 import { centerCameraOn, resizeCanvasToViewport } from '../render/camera.js';
 import { renderGroundGrid } from '../terrain/terrain-renderer.js';
 import { renderAllShadows } from '../render/shadows.js';
@@ -48,8 +51,14 @@ export function startEngineLoop(canvas, ctx) {
       if (ent.type === 'npc') {
         if (ent.npcType === 'rat') {
           updateRatNPC(ent, dt);
+        } else if (ent.npcType === 'shuppy') {
+          updateShuppyNPC(ent, dt);
+        } else if (ent.npcType === 'picken') {
+          updatePickenNPC(ent, dt);
         } else if (ent.npcType === 'piranha') {
           updatePiranhaNPC(ent, dt);
+        } else if (ent.npcType === 'eel') {
+          updateEelNPC(ent, dt);
         }
       }
     }
