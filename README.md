@@ -73,3 +73,4 @@ src/ui/                     Sprite editor, terrain painter, and controls
 ## Assets
 
 The repository includes the sprite sheets and metadata used by the demos. Check the source and usage rights for each included asset before reusing or redistributing it outside this project.
+
