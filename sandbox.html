@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2.5D Model Sandbox — Oblique</title>
+  <meta name="description" content="Test sprite sheets, anchors, depth sorting, terrain, and collisions in an interactive 2.5D game-world sandbox.">
+  <link rel="canonical" href="https://oblique.livive.net/sandbox.html">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏝️</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Main Viewport Area -->
+  <div id="viewport-container">
+    <div id="top-bar">
+      <div class="title-group">
+        <h1>2.5D Oblique Sprite Stacking Sandbox</h1>
+        <p>64×64 Centered World (4,096×4,096 px) • 64×64 Footprints • Dynamic Y-Sorting Depth</p>
+      </div>
+      <div class="hud-stats">
+        <div class="stat-pill" id="stat-fps">FPS: 60</div>
+        <div class="stat-pill" id="stat-player-tile">Tile: (24, 26)</div>
+        <div class="stat-pill" id="stat-depth-count">Renderables: 15</div>
+      </div>
+    </div>
+
+    <div id="canvas-wrapper">
+      <div id="world-sizer">
+        <canvas id="gameCanvas"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar UI / Controls -->
+  <div id="sidebar">
+
+    <!-- Instructions / Controls -->
+    <div class="section">
+      <div class="section-title">Controls</div>
+      <div class="info-callout">
+        Use <span class="key-badge">W</span> <span class="key-badge">A</span> <span class="key-badge">S</span> <span class="key-badge">D</span> or Arrow Keys to walk.
+        <br>Click any sprite on the canvas to open it in the <strong>Sprite Editor</strong>!
+      </div>
+    </div>
+
+    <!-- Debug Overlays -->
+    <div class="section">
+      <div class="section-title">Debug Overlays</div>
+      <div class="checkbox-list">
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-snap-grid" checked>
+          <span>Snap to Grid Movement (1 Tile per Step)</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-turn-pivot" checked>
+          <span>Turn Pivot Animation (12-Angle Turntable)</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-camera-follow" checked>
+          <span>Auto-Center Camera on Player</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-grid">
+          <span>Show Grid Lines</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-hitbox">
+          <span><span class="color-legend" style="background: #ef4444;"></span>64×64 Footprint Hitboxes</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-anchor">
+          <span><span class="color-legend" style="background: #eab308;"></span>Registration Anchor Crosshair</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-bounds">
+          <span><span class="color-legend" style="background: #06b6d4;"></span>Sprite Bounding Boxes</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-collision" checked>
+          <span>Solid Obstacle Collision</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-water-solid" checked>
+          <span>Water Impassable (Pier Walkable)</span>
+        </label>
+        <label class="checkbox-item">
+          <input type="checkbox" id="chk-shadows" checked>
+          <span>Directional Silhouette Shadows (Sun at East, 20° CCW)</span>
+        </label>
+        <div style="margin-top: 6px; padding: 6px 8px; background: #14171d; border-radius: 4px; border: 1px solid #2b303a;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+            <label style="margin: 0; font-size: 0.74rem;">Shadow Baseline Feather</label>
+            <span id="lbl-shadow-feather" style="font-size: 0.76rem; color: #38bdf8; font-family: monospace; font-weight: 600;">40%</span>
+          </div>
+          <input type="range" id="rng-shadow-feather" min="0" max="60" value="40" style="width: 100%; accent-color: var(--accent); cursor: pointer;">
+        </div>
+      </div>
+
+      <div style="margin-top: 14px;">
+        <label>Pixel Zoom Scale</label>
+        <div class="btn-group">
+          <button id="zoom-05x">0.5x (Fit)</button>
+          <button id="zoom-1x" class="active">1x</button>
+          <button id="zoom-15x">1.5x</button>
+          <button id="btn-reset-pos">Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sprite & Prop Inspector / Editor -->
+    <div class="section" id="section-sprite-editor">
+      <div class="section-title">Sprite & Prop Editor</div>
+      <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 8px; line-height: 1.4;">
+        Click any sprite in the canvas, or select from the dropdown to adjust its frame, anchor, position, and dimensions live.
+      </div>
+
+      <div class="form-group">
+        <label>Selected Target</label>
+        <select id="editor-entity-select">
+          <option value="">-- Click Sprite or Select --</option>
+        </select>
+      </div>
+
+      <div id="editor-controls-panel" style="display: none; padding: 10px; background: #14171d; border-radius: 6px; border: 1px solid #2b303a;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span id="ed-entity-name" style="font-weight: 600; font-size: 0.84rem; color: #38bdf8;">Item Name</span>
+          <span id="ed-entity-id" style="font-size: 0.70rem; color: var(--text-muted); font-family: monospace;">id</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+          <div>
+            <label>Tile X (Col 0..63)</label>
+            <input type="number" id="ed-tile-x" min="0" max="63" style="width: 100%;">
+          </div>
+          <div>
+            <label>Tile Y (Row 0..63)</label>
+            <input type="number" id="ed-tile-y" min="0" max="63" style="width: 100%;">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <label style="margin: 0;">Sprite Sheet Frame</label>
+            <span id="ed-frame-label" style="font-size: 0.74rem; color: #f59e0b; font-family: monospace; font-weight: 600;">Frame 0</span>
+          </div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button id="ed-prev-frame" style="padding: 4px 10px;" title="Previous Angle / Frame">◀</button>
+            <input type="range" id="ed-frame-slider" min="0" max="11" value="0" style="flex: 1; accent-color: #f59e0b; cursor: pointer;">
+            <button id="ed-next-frame" style="padding: 4px 10px;" title="Next Angle / Frame">▶</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Anchor Registration Preset</label>
+          <select id="ed-anchor-preset">
+            <option value="bottom-center">Bottom-Center (Props, Trees, Humanoids)</option>
+            <option value="center">Center (Mid-Body / Quadrupeds)</option>
+            <option value="custom">Custom (Specify X / Y below)</option>
+          </select>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+          <div>
+            <label>Anchor X (px)</label>
+            <input type="number" id="ed-anchor-x">
+          </div>
+          <div>
+            <label>Anchor Y (px)</label>
+            <input type="number" id="ed-anchor-y">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+          <div>
+            <label>Render Width (px)</label>
+            <input type="number" id="ed-render-w">
+          </div>
+          <div>
+            <label>Render Height (px)</label>
+            <input type="number" id="ed-render-h">
+          </div>
+        </div>
+
+        <div class="btn-group" style="display: flex; gap: 8px;">
+          <button id="ed-btn-center-cam" style="flex: 1;">Center View</button>
+          <button id="ed-btn-deselect" style="flex: 1;">Deselect</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grass Flow & Natural Gradient Smoothing -->
+    <div class="section" id="section-grass-smoothing">
+      <div class="section-title">Grass Flow & Gradient Smoothing</div>
+      <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 8px; line-height: 1.4;">
+        Buffs hard tile box edges into wandering meanders using out-of-sync harmonic sine waves and seam smudging.
+      </div>
+
+      <label>Flow / Smoothing Preset</label>
+      <div class="btn-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+        <button id="btn-grass-mode-meander" class="active">🌊 Sine Meander</button>
+        <button id="btn-grass-mode-smudge">🍃 Turf Smudge</button>
+        <button id="btn-grass-mode-ribbons">〰️ Flow Ribbons</button>
+        <button id="btn-grass-mode-biome">🗺️ Multi-Octave</button>
+      </div>
+
+      <div style="padding: 8px 10px; background: #14171d; border-radius: 6px; border: 1px solid #2b303a; margin-bottom: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+          <label style="margin: 0; font-size: 0.74rem;">Sine Meander Amplitude</label>
+          <span id="lbl-meander-amp" style="font-size: 0.76rem; color: #38bdf8; font-family: monospace; font-weight: 600;">35px</span>
+        </div>
+        <input type="range" id="rng-meander-amp" min="0" max="80" value="35" style="width: 100%; accent-color: var(--accent); cursor: pointer;">
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; margin-bottom: 3px;">
+          <label style="margin: 0; font-size: 0.74rem;">Wave Frequency</label>
+          <span id="lbl-meander-freq" style="font-size: 0.76rem; color: #38bdf8; font-family: monospace; font-weight: 600;">1.0x</span>
+        </div>
+        <input type="range" id="rng-meander-freq" min="30" max="250" value="100" style="width: 100%; accent-color: var(--accent); cursor: pointer;">
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; margin-bottom: 3px;">
+          <label style="margin: 0; font-size: 0.74rem;">Tile Seam Smudge Bleed</label>
+          <span id="lbl-seam-smudge" style="font-size: 0.76rem; color: #38bdf8; font-family: monospace; font-weight: 600;">12px</span>
+        </div>
+        <input type="range" id="rng-seam-smudge" min="0" max="24" value="12" style="width: 100%; accent-color: var(--accent); cursor: pointer;">
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <button id="btn-toggle-pure-grass" class="active" style="flex: 1;">🌱 Pure Grass Land</button>
+        <button id="btn-toggle-dirt-path" style="flex: 1;">🪨 Show Dirt Trail</button>
+      </div>
+    </div>
+
+    <!-- Terrain & Map Painter -->
+    <div class="section">
+      <div class="section-title">Terrain & Map Painter</div>
+      <label>Paint Brush</label>
+      <div class="btn-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+        <button id="brush-none" class="active">Play Mode</button>
+        <button id="brush-grass">🌿 Grass</button>
+        <button id="brush-dirt">🪨 Dirt Path</button>
+        <button id="brush-sand">🏖️ Sand Beach</button>
+        <button id="brush-water" style="grid-column: span 2;">🌊 Water</button>
+      </div>
+      <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px; line-height: 1.4;">
+        Select a brush, then click or drag across the grid to paint terrain in real time.
+      </div>
+      <div class="btn-group" style="margin-top: 8px;">
+        <button id="btn-reset-terrain" style="width: 100%;">Reset Default Terrain</button>
+      </div>
+    </div>
+
+    <!-- Active Player Preset -->
+    <div class="section">
+      <div class="section-title">Player Character Sprite</div>
+      <div class="preset-card active" id="card-rukiya" onclick="setPlayerModel('rukiya')">
+        <h4>Rukiya (Humanoid)</h4>
+        <p>1024×640 sheet (8 cols × 5 rows, 128×128 frames, 8 FPS walk cycle)</p>
+      </div>
+      <div class="preset-card" id="card-river-rat" onclick="setPlayerModel('river-rat')">
+        <h4>River Rat (Quadruped)</h4>
+        <p>1024×640 sheet (128×128 frames, centered mid-body on tile)</p>
+      </div>
+    </div>
+
+    <!-- Custom Sprite Sheet Injector -->
+    <div class="section">
+      <div class="section-title">Custom Sprite Sheet Injector</div>
+      <div class="form-group">
+        <label>Select Local Image (PNG / WebP)</label>
+        <input type="file" id="file-uploader" accept="image/*">
+      </div>
+      <div class="form-group">
+        <label>Or Image URL</label>
+        <input type="text" id="input-url" placeholder="Enter relative or https:// URL">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Frame Width (px)</label>
+          <input type="number" id="cfg-frame-w" value="128">
+        </div>
+        <div class="form-group">
+          <label>Frame Height (px)</label>
+          <input type="number" id="cfg-frame-h" value="128">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>FPS</label>
+          <input type="number" id="cfg-fps" value="8">
+        </div>
+        <div class="form-group">
+          <label>Row Order Preset</label>
+          <select id="cfg-preset-row">
+            <option value="standard">Down, Right, Up, Left</option>
+            <option value="single">Single Row</option>
+          </select>
+        </div>
+      </div>
+      <button class="primary" id="btn-apply-custom">Load Custom Sprite</button>
+    </div>
+
+    <!-- Props in Scene -->
+    <div class="section">
+      <div class="section-title">Scene Props & NPCs</div>
+      <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.5;">
+        <div style="margin-bottom: 6px;">• <strong>Towering Palm Trees (x4)</strong>: 256×256 towering trees (anchored at trunk base, canopies overlap tiles above)</div>
+        <div style="margin-bottom: 6px;">• <strong>Fisher's Cottage</strong>: Tiles (22, 24) to (23, 25) — 256×256 sprite (double size, 4-tile solid footprint)</div>
+        <div style="margin-bottom: 6px;">• <strong>Barrels (x3)</strong>: Cottage eaves (Tiles 21,24 & 24,23) + trail barrel (22,26)</div>
+        <div style="margin-bottom: 6px;">• <strong>Brown River Rat</strong>: Tile (26, 28) — 128×128 quadruped with autonomous wandering & head turning</div>
+        <div style="margin-bottom: 6px;">• <strong>Black Rat NPC</strong>: Tile (20, 28) — 76×76 (60% scale) agile black rat created by shading the regular rat bitmap</div>
+        <div style="margin-bottom: 6px;">• <strong>Directional Silhouette Shadows</strong>: Sheared 20° CCW to the left from east sun, cast flat on terrain under all props & characters</div>
+      </div>
+    </div>
+
+  </div>
+
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
