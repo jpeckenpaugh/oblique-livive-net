@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Playground</title>
+  <link rel="stylesheet" href="css/playground.css">
+</head>
+<body>
+  <canvas id="playground" aria-label="10 by 10 grass playground"></canvas>
+  <button id="hud-toggle" aria-expanded="true" aria-controls="paint-hud">Hide paint tools</button>
+  <aside id="paint-hud" aria-label="Terrain painting tools">
+    <div id="scenes" aria-label="Default scenes">
+      <button class="scene active" data-scene="grass">All grass</button>
+      <button class="scene" data-scene="fields">Fields</button>
+      <button class="scene" data-scene="beach">Beach Side</button>
+      <button class="scene" data-scene="island">Small Island</button>
+      <button class="scene" data-scene="underwater">Underwater</button>
+      <button class="scene" data-scene="river">Big river</button>
+      <button class="scene" data-scene="stream">Little Stream</button>
+    </div>
+    <div class="separator"></div>
+    <button class="brush active" data-tool="walk">Walk</button>
+    <button class="brush" data-tool="grass">Grass</button>
+    <button class="brush" data-tool="dirt">Dirt</button>
+    <button class="brush" data-tool="sand">Sand</button>
+    <button class="brush" data-tool="water">Water</button>
+  </aside>
+  <section id="rukiya-controls" hidden aria-label="Rukiya controls">
+    <button id="close-rukiya" type="button" aria-label="Close Rukiya controls">×</button>
+    <strong>Rukiya</strong>
+    <span class="control-label">Facing</span>
+    <div class="facing-controls" role="group" aria-label="Facing direction">
+      <button data-facing="2" aria-label="Face north">↑</button>
+      <button data-facing="3" aria-label="Face west">←</button>
+      <button data-facing="0" aria-label="Face south">↓</button>
+      <button data-facing="1" aria-label="Face east">→</button>
+    </div>
+    <span class="control-label">Location · column, row</span>
+    <div class="location-controls">
+      <input id="location-x" type="number" min="0" max="15" aria-label="Column">
+      <input id="location-y" type="number" min="0" max="15" aria-label="Row">
+      <button id="set-location" type="button">Go</button>
+    </div>
+  </section>
+  <script type="module" src="src/playground.js"></script>
+</body>
+</html>
