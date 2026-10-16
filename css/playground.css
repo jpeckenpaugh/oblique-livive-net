@@ -1,1 +1,34 @@
-*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#172019}body{font:13px system-ui,sans-serif}canvas{display:block;width:100%;height:100%;image-rendering:pixelated;touch-action:none}button{font:inherit;color:#eee;background:#202820;border:1px solid #59645a;border-radius:4px;padding:7px 10px;cursor:pointer}button:hover{background:#344436}#hud-toggle{position:fixed;top:10px;right:10px}#paint-hud{position:fixed;top:52px;right:10px;display:flex;flex-direction:column;gap:5px;padding:7px;background:#111b;border:1px solid #59645a;border-radius:5px}#paint-hud[hidden]{display:none}.brush.active,.scene.active{background:#54764f;border-color:#a3d28b}#scenes{display:grid;grid-template-columns:1fr 1fr;gap:4px}.scene{padding:6px 7px;font-size:12px}.separator{border-top:1px solid #59645a;margin:3px 0}#rukiya-controls{position:fixed;left:10px;top:10px;display:grid;grid-template-columns:1fr auto;gap:8px 12px;min-width:190px;padding:12px;background:#111e;border:1px solid #59645a;border-radius:5px;color:#fff}#rukiya-controls[hidden]{display:none}#rukiya-controls strong{align-self:center}#close-rukiya{grid-column:2;grid-row:1;padding:2px 8px;font-size:18px;line-height:20px}.control-label{grid-column:1/-1;color:#b8c4b9;font-size:11px}.facing-controls{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);gap:5px}.facing-controls button{font-size:17px;padding:4px}.facing-controls button.active{background:#54764f;border-color:#a3d28b}.location-controls{grid-column:1/-1;display:flex;gap:5px}.location-controls input{width:52px;min-width:0;padding:6px;background:#202820;color:#fff;border:1px solid #59645a;border-radius:4px}
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#172019}
+body{font:13px system-ui,sans-serif}
+canvas#playground{display:block;width:100%;height:100%;image-rendering:pixelated;touch-action:none}
+button{font:inherit;color:#eee;background:#202820;border:1px solid #59645a;border-radius:4px;padding:7px 10px;cursor:pointer}
+button:hover{background:#344436}
+#hud-toggle,#sprite-toggle{position:fixed;top:10px}
+#hud-toggle{right:10px}#sprite-toggle{left:10px}
+#ai-toggle{position:fixed;top:10px;left:84px;min-width:105px}
+#paint-hud{position:fixed;top:52px;right:10px;display:flex;flex-direction:column;gap:5px;padding:7px;background:#111b;border:1px solid #59645a;border-radius:5px}
+#paint-hud[hidden],#sprite-picker[hidden],#placed-controls[hidden],#rukiya-controls[hidden]{display:none}
+.brush.active,.scene.active,.sprite-choice.active{background:#54764f;border-color:#a3d28b}
+#scenes{display:grid;grid-template-columns:1fr 1fr;gap:4px}.scene{padding:6px 7px;font-size:12px}
+.separator{border-top:1px solid #59645a;margin:3px 0}
+#sprite-picker,#placed-controls{position:fixed;left:10px;top:52px;width:220px;padding:10px;background:#111e;border:1px solid #59645a;border-radius:5px;color:#fff}
+#sprite-picker>strong{display:block}
+#sprite-list{display:grid;gap:5px;max-height:min(65vh,520px);overflow:auto;margin:8px 0}
+.sprite-choice{display:flex;align-items:center;gap:9px;text-align:left;padding:5px}
+.sprite-choice canvas{width:42px;height:42px;object-fit:contain;background:#172019;border-radius:3px}
+.sprite-choice span{font-size:12px}
+#sprite-picker small{display:block;color:#b8c4b9;font-size:10px;line-height:1.4}
+#placed-controls{top:auto;bottom:10px;display:grid;grid-template-columns:1fr auto;gap:8px 12px;min-width:190px}
+#placed-controls strong,#rukiya-controls strong{align-self:center}
+#close-placed,#close-rukiya{grid-column:2;grid-row:1;padding:2px 8px;font-size:18px;line-height:20px}
+.control-label{grid-column:1/-1;color:#b8c4b9;font-size:11px}
+.orientation-controls{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between}
+.orientation-controls span{font-size:11px;color:#dce8dd}
+.location-controls{grid-column:1/-1;display:flex;gap:5px}
+.location-controls input{width:52px;min-width:0;padding:6px;background:#202820;color:#fff;border:1px solid #59645a;border-radius:4px}
+#placed-controls .scale-label{display:flex;justify-content:space-between;align-items:center}#sprite-scale{grid-column:1/-1;width:100%;accent-color:#a3d28b;margin:-3px 0 3px}.ai-setting{grid-column:1/-1;display:flex;align-items:center;gap:7px;color:#dce8dd;font-size:11px}.ai-setting input{accent-color:#a3d28b}
+#rukiya-controls{position:fixed;left:10px;top:10px;display:grid;grid-template-columns:1fr auto;gap:8px 12px;min-width:190px;padding:12px;background:#111e;border:1px solid #59645a;border-radius:5px;color:#fff}
+.facing-controls{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.facing-controls button{font-size:17px;padding:4px}.facing-controls button.active{background:#54764f;border-color:#a3d28b}
+.ai-setting[hidden]{display:none}
