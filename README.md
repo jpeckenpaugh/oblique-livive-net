@@ -9,6 +9,7 @@ Oblique is a browser-based workbench for exploring 2.5D game worlds on an orthog
 ## Explore
 
 - [**2.5D Model Sandbox**](https://oblique.livive.net/sandbox.html) — Move through a scene, inspect and edit sprites, paint terrain, and test anchors, depth sorting, collisions, and shadows.
+- [**Playground**](https://oblique.livive.net/playground.html) — Build 16×16 scenes with terrain and sprite painting, per-sprite scaling, NPC behavior, ordered events, and local save/import/export.
 - [**Terrain Layers**](https://oblique.livive.net/terrain-layers.html) — Experiment with a five-layer terrain substrate, shoreline foam, water, procedural noise, and layer visibility.
 - [**Beach Camp**](https://oblique.livive.net/beach-camp.html) — Explore the terrain system in a larger coastal scene with paths, beaches, waterways, vegetation, and props.
 
@@ -28,6 +29,7 @@ git clone git@github.com:jpeckenpaugh/oblique-livive-net.git
 - Player movement, wandering NPCs, obstacle collision, camera controls, and directional silhouette shadows
 - Debug overlays for grids, hitboxes, bounds, anchors, collisions, and shadows
 - Custom local image and sprite-sheet loading in the main sandbox
+- Scene templates, locally saved layouts, document import/export, and ordered scene events in the Playground
 
 ## Run locally
 
@@ -56,6 +58,7 @@ The root `CNAME` file declares the custom domain for Pages. Internal page and as
 ```text
 index.html                  Landing page and experience directory
 sandbox.html                Modular sprite / terrain sandbox
+playground.html             Lightweight scene builder and event sequencer
 terrain-layers.html         Five-layer terrain proof of concept
 beach-camp.html             Coastal scene study
 beach-camp-no-foam.html     Alternate Beach Camp water experiment
@@ -73,4 +76,3 @@ src/ui/                     Sprite editor, terrain painter, and controls
 ## Assets
 
 The repository includes the sprite sheets and metadata used by the demos. Check the source and usage rights for each included asset before reusing or redistributing it outside this project.
-

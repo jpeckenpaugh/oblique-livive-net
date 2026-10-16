@@ -10,7 +10,14 @@
   <canvas id="playground" aria-label="10 by 10 grass playground"></canvas>
   <button id="hud-toggle" aria-expanded="true" aria-controls="paint-hud">Hide paint tools</button>
   <button id="sprite-toggle" aria-expanded="false" aria-controls="sprite-picker">Sprites</button>
+  <button id="layout-toggle" aria-expanded="false" aria-controls="scene-manager">Scenes</button>
   <button id="ai-toggle" aria-pressed="false">Play NPCs</button>
+  <div id="readonly-bar" hidden>
+    <span><span id="readonly-mode">Viewing</span> <strong id="readonly-name"></strong></span>
+    <button id="return-to-editor" type="button">Return to editing</button>
+    <button id="pause-sequence" type="button" hidden>Pause</button>
+    <button id="stop-sequence" type="button" hidden>Stop</button>
+  </div>
   <aside id="paint-hud" aria-label="Terrain painting tools">
     <div id="scenes" aria-label="Default scenes">
       <button class="scene active" data-scene="grass">All grass</button>
@@ -32,6 +39,57 @@
     <strong>Choose a sprite</strong>
     <div id="sprite-list"></div>
     <small>Select a preview, then click or drag to paint copies. Select a placed sprite to change its scale, facing, or position.</small>
+  </aside>
+  <aside id="scene-manager" hidden aria-label="Saved scenes">
+    <strong>Saved scenes</strong>
+    <div class="save-row">
+      <input id="scene-name" type="text" maxlength="48" placeholder="Name this scene" aria-label="Scene name">
+      <button id="save-scene" type="button">Save scene</button>
+    </div>
+    <div class="document-actions">
+      <button id="export-document" type="button">Export document</button>
+      <button id="import-document" type="button">Import document</button>
+      <input id="document-file" type="file" accept=".json,application/json" hidden>
+    </div>
+    <div id="scene-message" role="status" aria-live="polite"></div>
+    <div id="saved-scenes" role="list"></div>
+    <small>Saved only in this browser. Drag scenes to reorder them.</small>
+  </aside>
+  <aside id="event-editor" hidden aria-label="Scene events">
+    <div class="event-heading"><strong id="event-scene-name">Scene events</strong><button id="close-events" type="button" aria-label="Close event editor">×</button></div>
+    <button id="play-sequence" type="button">Play scene sequence</button>
+    <label class="event-field">Event type
+      <select id="event-type">
+        <option value="move">Move a sprite</option>
+        <option value="visibility">Show / hide a sprite</option>
+        <option value="narration">Narration box</option>
+        <option value="dialogue">Dialogue</option>
+        <option value="wait">Pause</option>
+        <option value="transition">Transition to scene</option>
+      </select>
+    </label>
+    <label class="event-field" data-event-field="target">Sprite / NPC
+      <select id="event-target"></select>
+    </label>
+    <div class="event-field event-coordinates" data-event-field="move">
+      <label>Destination column<input id="event-x" type="number" min="0" max="15" value="5"></label>
+      <label>Destination row<input id="event-y" type="number" min="0" max="15" value="5"></label>
+    </div>
+    <label class="event-field" data-event-field="visibility">Visibility
+      <select id="event-visible"><option value="true">Show</option><option value="false">Hide</option></select>
+    </label>
+    <label class="event-field" data-event-field="text">Text
+      <textarea id="event-text" rows="3" maxlength="240" placeholder="Type the line to display"></textarea>
+    </label>
+    <label class="event-field" data-event-field="duration">Duration (seconds)
+      <input id="event-duration" type="number" min="0.1" max="120" step="0.5" value="2">
+    </label>
+    <label class="event-field" data-event-field="transition">Next scene
+      <select id="event-next-scene"></select>
+    </label>
+    <button id="add-event" type="button">Add event</button>
+    <ol id="scene-events"></ol>
+    <small>Events run in order and are saved with this scene.</small>
   </aside>
   <section id="placed-controls" hidden aria-label="Placed sprite controls">
     <button id="close-placed" type="button" aria-label="Close sprite controls">×</button>

@@ -6,13 +6,39 @@ button{font:inherit;color:#eee;background:#202820;border:1px solid #59645a;borde
 button:hover{background:#344436}
 #hud-toggle,#sprite-toggle{position:fixed;top:10px}
 #hud-toggle{right:10px}#sprite-toggle{left:10px}
-#ai-toggle{position:fixed;top:10px;left:84px;min-width:105px}
+#layout-toggle,#ai-toggle{position:fixed;top:10px}
+#layout-toggle{left:82px}#ai-toggle{left:157px;min-width:105px}
+body.readonly #hud-toggle,body.readonly #sprite-toggle,body.readonly #layout-toggle,body.readonly #ai-toggle{display:none}
+#readonly-bar{position:fixed;z-index:5;top:10px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;padding:5px 7px 5px 12px;background:#111e;border:1px solid #59645a;border-radius:5px;color:#eee;white-space:nowrap}
+#readonly-bar[hidden]{display:none}
 #paint-hud{position:fixed;top:52px;right:10px;display:flex;flex-direction:column;gap:5px;padding:7px;background:#111b;border:1px solid #59645a;border-radius:5px}
-#paint-hud[hidden],#sprite-picker[hidden],#placed-controls[hidden],#rukiya-controls[hidden]{display:none}
+#paint-hud[hidden],#sprite-picker[hidden],#scene-manager[hidden],#event-editor[hidden],#placed-controls[hidden],#rukiya-controls[hidden]{display:none}
 .brush.active,.scene.active,.sprite-choice.active{background:#54764f;border-color:#a3d28b}
 #scenes{display:grid;grid-template-columns:1fr 1fr;gap:4px}.scene{padding:6px 7px;font-size:12px}
 .separator{border-top:1px solid #59645a;margin:3px 0}
 #sprite-picker,#placed-controls{position:fixed;left:10px;top:52px;width:220px;padding:10px;background:#111e;border:1px solid #59645a;border-radius:5px;color:#fff}
+#scene-manager{position:fixed;left:10px;top:52px;width:min(340px,calc(100vw - 20px));max-height:82vh;overflow:auto;padding:12px;background:#111e;border:1px solid #59645a;border-radius:5px;color:#fff}
+#scene-manager>strong{display:block;margin-bottom:9px}
+.save-row{display:flex;gap:6px}.save-row input,.rename-input{min-width:0;flex:1;padding:7px;background:#202820;color:#fff;border:1px solid #59645a;border-radius:4px;font:inherit}
+.document-actions{display:flex;gap:6px;margin-top:7px}.document-actions button{flex:1;padding:6px;font-size:11px}
+#scene-message{min-height:17px;margin-top:5px;color:#b8c4b9;font-size:10px}
+#saved-scenes{display:grid;gap:5px;margin:5px 0 9px}
+.saved-scene{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px;padding:5px;background:#202820;border:1px solid #424f45;border-radius:4px}
+.saved-scene[draggable=true]{cursor:grab}.saved-scene.dragging{opacity:.45}.saved-scene.over{border-color:#a3d28b}
+.saved-scene .load-scene{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.scene-actions{display:flex;gap:3px}.scene-actions button{padding:4px 6px;font-size:11px}
+#scene-manager small{display:block;color:#b8c4b9;font-size:10px;line-height:1.4}
+#event-editor{position:fixed;left:10px;top:52px;width:min(340px,calc(100vw - 20px));max-height:84vh;overflow:auto;padding:12px;background:#111e;border:1px solid #59645a;border-radius:5px;color:#fff}
+.event-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.event-heading button{padding:2px 8px;font-size:18px;line-height:20px}
+#play-sequence,#add-event{width:100%;margin-bottom:8px}
+.event-field{display:grid;gap:4px;margin:7px 0;color:#b8c4b9;font-size:11px}
+.event-field[hidden]{display:none}
+.event-field input,.event-field select,.event-field textarea{width:100%;min-width:0;padding:7px;background:#202820;color:#fff;border:1px solid #59645a;border-radius:4px;font:12px system-ui,sans-serif}
+.event-coordinates{grid-template-columns:1fr 1fr;gap:8px}.event-coordinates label{display:grid;gap:4px}
+#scene-events{display:grid;gap:5px;padding-left:25px;margin:8px 0;max-height:32vh;overflow:auto}
+.scene-event{padding:5px;background:#202820;border:1px solid #424f45;border-radius:4px;font-size:10px;line-height:1.4}
+.scene-event-row{display:flex;align-items:center;gap:5px}.scene-event-row span{flex:1}.scene-event-row button{padding:3px 5px;font-size:10px}
+#scene-events small{display:block;color:#b8c4b9}
 #sprite-picker>strong{display:block}
 #sprite-list{display:grid;gap:5px;max-height:min(65vh,520px);overflow:auto;margin:8px 0}
 .sprite-choice{display:flex;align-items:center;gap:9px;text-align:left;padding:5px}

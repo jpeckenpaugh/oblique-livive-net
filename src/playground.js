@@ -47,8 +47,37 @@ let selectedSprite = null;
 let nextSpriteId = 1;
 let aiPlaying = false;
 let lastPaintCell = null;
+const SCENE_STORAGE_KEY = 'oblique.playground.scenes.v1';
+let savedScenes = [];
+let activeLayoutId = null;
+let readOnlyView = false;
+let editorBeforeView = null;
+let eventSceneId = null;
+let editingEventIndex = null;
+let sequencePlayback = null;
+let activeMessage = null;
+try {
+  const stored = JSON.parse(localStorage.getItem(SCENE_STORAGE_KEY) || '[]');
+  if (Array.isArray(stored)) savedScenes = stored.filter(scene => scene && typeof scene.id === 'string' && typeof scene.name === 'string');
+} catch {
+  savedScenes = [];
+}
 
 function loadScene(name) {
+  placedSprites.length = 0;
+  selectedSprite = null;
+  armedSprite = null;
+  activeLayoutId = null;
+  sequencePlayback = null;
+  activeMessage = null;
+  document.getElementById('scene-name').value = '';
+  document.getElementById('placed-controls').hidden = true;
+  showRukiyaControls(false);
+  selectWalkTool();
+  aiPlaying = false;
+  const playButton = document.getElementById('ai-toggle');
+  playButton.textContent = 'Play NPCs';
+  playButton.setAttribute('aria-pressed', 'false');
   for (const row of terrain) row.fill('grass');
   const set = (x, y, type) => {
     if (x >= 0 && y >= 0 && x < GRID && y < GRID) terrain[y][x] = type;
@@ -109,8 +138,710 @@ function loadScene(name) {
   player.y = player.fromY = player.toY = safe.y;
   player.moving = false;
   player.anim = 0;
-  if (rukiyaSelected) showRukiyaControls(true);
+  player.direction = 0;
+  player.visible = true;
+  renderSavedScenes();
   document.querySelectorAll('.scene').forEach(button => button.classList.toggle('active', button.dataset.scene === name));
+}
+
+function makeSceneId() {
+  return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+function sceneSnapshot() {
+  const playerProgress = player.moving ? Math.min(1, player.elapsed / .18) : 1;
+  return {
+    version: 1,
+    terrain: terrain.map(row => [...row]),
+    player: {
+      x: Math.round(player.fromX + (player.toX - player.fromX) * playerProgress),
+      y: Math.round(player.fromY + (player.toY - player.fromY) * playerProgress),
+      direction: player.direction,
+      visible: player.visible !== false
+    },
+    sprites: placedSprites.map(object => {
+      const progress = object.aiMoving ? Math.min(1, object.aiElapsed / object.aiDuration) : 1;
+      return {
+        id: object.id,
+        type: object.type.id,
+        x: Math.round(object.aiMoving ? object.fromX + (object.toX - object.fromX) * progress : object.x),
+        y: Math.round(object.aiMoving ? object.fromY + (object.toY - object.fromY) * progress : object.y),
+        frame: object.frame,
+        scale: object.scale,
+        aiEnabled: object.aiEnabled,
+        visible: object.visible !== false
+      };
+    })
+  };
+}
+function persistScenes() {
+  try {
+    localStorage.setItem(SCENE_STORAGE_KEY, JSON.stringify(savedScenes));
+    return true;
+  } catch {
+    setSceneMessage('Could not save to browser storage.');
+    return false;
+  }
+}
+function setSceneMessage(message = '') {
+  document.getElementById('scene-message').textContent = message;
+}
+function saveCurrentScene() {
+  const input = document.getElementById('scene-name');
+  const name = input.value.trim();
+  if (!name) { setSceneMessage('Enter a name for this scene.'); input.focus(); return; }
+  const matching = savedScenes.find(scene => scene.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+  const record = { ...(matching || {}), id: matching?.id || makeSceneId(), name, layout: sceneSnapshot(), events: matching?.events || [] };
+  if (matching) savedScenes[savedScenes.indexOf(matching)] = record;
+  else savedScenes.push(record);
+  activeLayoutId = record.id;
+  if (!persistScenes()) return;
+  renderSavedScenes();
+  setSceneMessage(matching ? `Updated “${name}”.` : `Saved “${name}”.`);
+}
+function exportDocument() {
+  for (const scene of savedScenes) {
+    ensureSceneSpriteIds(scene);
+    scene.events ||= [];
+  }
+  persistScenes();
+  const documentData = {
+    format: 'oblique-playground-document',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    scenes: savedScenes,
+    workspace: {
+      layout: sceneSnapshot(),
+      sceneName: document.getElementById('scene-name').value,
+      activeSceneId: activeLayoutId,
+      activeTemplate: document.querySelector('.scene.active')?.dataset.scene || null,
+      aiPlaying
+    }
+  };
+  const blob = new Blob([JSON.stringify(documentData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `playground-document-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setSceneMessage('Document exported.');
+}
+function normalizeImportedLayout(layout) {
+  if (!layout || !Array.isArray(layout.terrain) || layout.terrain.length !== GRID) throw new Error('A scene must have a 16 × 16 terrain map.');
+  const terrainTypes = new Set(['grass', 'dirt', 'sand', 'water', 'field']);
+  const terrainData = layout.terrain.map(row => {
+    if (!Array.isArray(row) || row.length !== GRID || row.some(type => !terrainTypes.has(type))) throw new Error('The document contains an invalid terrain map.');
+    return [...row];
+  });
+  if (!Array.isArray(layout.sprites)) throw new Error('The document is missing scene sprites.');
+  const ids = new Set();
+  const sprites = layout.sprites.map(item => {
+    const type = spriteTypes.find(entry => entry.id === item.type);
+    if (!type || !Number.isInteger(item.id) || ids.has(item.id)) throw new Error('The document contains an invalid sprite or duplicate sprite ID.');
+    ids.add(item.id);
+    return {
+      id: item.id, type: item.type,
+      x: Math.max(0, Math.min(GRID - 1, Math.round(Number(item.x) || 0))),
+      y: Math.max(0, Math.min(GRID - 1, Math.round(Number(item.y) || 0))),
+      frame: Math.max(0, Math.floor(Number(item.frame) || 0)) % type.frames,
+      scale: Math.max(.5, Math.min(4, Number(item.scale) || type.defaultScale || 1)),
+      aiEnabled: type.aiDefault ? item.aiEnabled !== false : false,
+      visible: item.visible !== false
+    };
+  });
+  const savedPlayer = layout.player || {};
+  return {
+    version: 1,
+    terrain: terrainData,
+    sprites,
+    player: {
+      x: Math.max(0, Math.min(GRID - 1, Math.round(Number(savedPlayer.x) || 0))),
+      y: Math.max(0, Math.min(GRID - 1, Math.round(Number(savedPlayer.y) || 0))),
+      direction: Math.max(0, Math.min(3, Math.floor(Number(savedPlayer.direction) || 0))),
+      visible: savedPlayer.visible !== false
+    }
+  };
+}
+function normalizeImportedScenes(data) {
+  if (data?.format !== 'oblique-playground-document' || data.version !== 1 || !Array.isArray(data.scenes)) {
+    throw new Error('This file is not a supported Playground document.');
+  }
+  const ids = new Set(), names = new Set();
+  const scenes = data.scenes.map(scene => {
+    const name = typeof scene.name === 'string' ? scene.name.trim() : '';
+    const id = typeof scene.id === 'string' ? scene.id : '';
+    if (!name || !id || ids.has(id) || names.has(name.toLocaleLowerCase())) throw new Error('Scene names and IDs must be present and unique.');
+    ids.add(id); names.add(name.toLocaleLowerCase());
+    const layout = normalizeImportedLayout(scene.layout);
+    return { id, name: name.slice(0, 48), layout, events: [] };
+  });
+  for (let i = 0; i < scenes.length; i++) {
+    const sourceEvents = data.scenes[i].events || [];
+    if (!Array.isArray(sourceEvents)) throw new Error(`Events for “${scenes[i].name}” are invalid.`);
+    const sprites = new Set(scenes[i].layout.sprites.map(sprite => String(sprite.id)));
+    scenes[i].events = sourceEvents.map(event => {
+      if (!event || typeof event !== 'object') throw new Error('The document contains an invalid event.');
+      const type = event.type;
+      if (type === 'move' || type === 'visibility' || type === 'dialogue') {
+        if (event.target !== 'player' && !sprites.has(String(event.target))) throw new Error(`An event in “${scenes[i].name}” points to a missing sprite.`);
+      }
+      if (type === 'move') return {
+        type, target: String(event.target),
+        x: Math.max(0, Math.min(GRID - 1, Math.round(Number(event.x) || 0))),
+        y: Math.max(0, Math.min(GRID - 1, Math.round(Number(event.y) || 0))),
+        duration: Math.max(.1, Math.min(120, Number(event.duration) || 1))
+      };
+      if (type === 'visibility') return { type, target: String(event.target), visible: event.visible !== false };
+      if (type === 'narration' || type === 'dialogue') {
+        const text = typeof event.text === 'string' ? event.text.trim() : '';
+        if (!text) throw new Error('Narration and dialogue events need text.');
+        return { type, ...(type === 'dialogue' ? { target: String(event.target) } : {}), text: text.slice(0, 240), duration: Math.max(.1, Math.min(120, Number(event.duration) || 2)) };
+      }
+      if (type === 'wait') return { type, duration: Math.max(.1, Math.min(120, Number(event.duration) || 1)) };
+      if (type === 'transition') {
+        if (typeof event.sceneId !== 'string' || !ids.has(event.sceneId) && !data.scenes.some(item => item.id === event.sceneId)) throw new Error('A transition points to a missing scene.');
+        return { type, sceneId: event.sceneId };
+      }
+      throw new Error(`Unsupported event type: ${type}`);
+    });
+  }
+  const workspace = data.workspace && typeof data.workspace === 'object' ? {
+    layout: normalizeImportedLayout(data.workspace.layout),
+    sceneName: typeof data.workspace.sceneName === 'string' ? data.workspace.sceneName : '',
+    activeSceneId: typeof data.workspace.activeSceneId === 'string' && ids.has(data.workspace.activeSceneId) ? data.workspace.activeSceneId : null,
+    activeTemplate: typeof data.workspace.activeTemplate === 'string' ? data.workspace.activeTemplate : null,
+    aiPlaying: data.workspace.aiPlaying === true
+  } : null;
+  return { scenes, workspace };
+}
+async function importDocument(file) {
+  if (!file || readOnlyView) return;
+  try {
+    const parsed = JSON.parse(await file.text());
+    const imported = normalizeImportedScenes(parsed);
+    if (!window.confirm(`Replace the current saved scenes and workspace with ${imported.scenes.length} imported scene${imported.scenes.length === 1 ? '' : 's'}?`)) return;
+    const previousScenes = savedScenes;
+    savedScenes = imported.scenes;
+    for (const scene of savedScenes) for (const item of scene.layout.sprites) nextSpriteId = Math.max(nextSpriteId, item.id + 1);
+    if (!persistScenes()) { savedScenes = previousScenes; renderSavedScenes(); return; }
+    if (imported.workspace) {
+      applyLayout(imported.workspace.layout);
+      activeLayoutId = imported.workspace.activeSceneId;
+      document.getElementById('scene-name').value = imported.workspace.sceneName;
+      document.querySelectorAll('.scene').forEach(button => button.classList.toggle('active', button.dataset.scene === imported.workspace.activeTemplate));
+      aiPlaying = imported.workspace.aiPlaying;
+      const playButton = document.getElementById('ai-toggle');
+      playButton.textContent = aiPlaying ? 'Pause NPCs' : 'Play NPCs';
+      playButton.setAttribute('aria-pressed', String(aiPlaying));
+    }
+    eventSceneId = null;
+    editingEventIndex = null;
+    document.getElementById('event-editor').hidden = true;
+    renderSavedScenes();
+    setSceneMessage(`Imported ${savedScenes.length} scene${savedScenes.length === 1 ? '' : 's'}.`);
+  } catch (error) {
+    setSceneMessage(`Import failed: ${error.message || 'invalid document'}`);
+  }
+}
+function applyLayout(layout) {
+  activeMessage = null;
+  const validTerrain = new Set(['grass', 'dirt', 'sand', 'water', 'field']);
+  if (Array.isArray(layout.terrain)) {
+    for (let y = 0; y < GRID; y++) for (let x = 0; x < GRID; x++) {
+      const value = layout.terrain[y]?.[x];
+      terrain[y][x] = validTerrain.has(value) ? value : 'grass';
+    }
+  }
+  placedSprites.length = 0;
+  for (const saved of Array.isArray(layout.sprites) ? layout.sprites : []) {
+    const type = spriteTypes.find(item => item.id === saved.type);
+    if (!type) continue;
+    const x = Math.max(0, Math.min(GRID - 1, Math.round(Number(saved.x) || 0)));
+    const y = Math.max(0, Math.min(GRID - 1, Math.round(Number(saved.y) || 0)));
+    const id = Number.isInteger(saved.id) ? saved.id : nextSpriteId++;
+    nextSpriteId = Math.max(nextSpriteId, Number(id) + 1);
+    placedSprites.push({
+      id, type, x, y,
+      frame: Math.max(0, Math.floor(Number(saved.frame) || 0)) % type.frames,
+      scale: Math.max(.5, Math.min(4, Number(saved.scale) || type.defaultScale || 1)),
+      aiEnabled: type.aiDefault ? saved.aiEnabled !== false : false,
+      visible: saved.visible !== false,
+      aiMoving: false, aiWait: .4 + Math.random() * 1.2, aiElapsed: 0, aiDuration: .32,
+      fromX: x, fromY: y, toX: x, toY: y
+    });
+  }
+  const savedPlayer = layout.player || {};
+  setLocation(Number(savedPlayer.x) || 0, Number(savedPlayer.y) || 0);
+  player.direction = Math.max(0, Math.min(3, Math.floor(Number(savedPlayer.direction) || 0)));
+  player.visible = savedPlayer.visible !== false;
+  player.anim = 0;
+  selectedSprite = null; armedSprite = null;
+  document.getElementById('placed-controls').hidden = true;
+  showRukiyaControls(false);
+  selectWalkTool();
+  aiPlaying = false;
+  const playButton = document.getElementById('ai-toggle');
+  playButton.textContent = 'Play NPCs';
+  playButton.setAttribute('aria-pressed', 'false');
+  document.querySelectorAll('.scene').forEach(button => button.classList.remove('active'));
+}
+function loadSavedScene(id) {
+  const record = savedScenes.find(scene => scene.id === id);
+  if (!record?.layout) return;
+  if (readOnlyView) returnToEditor();
+  applyLayout(record.layout);
+  activeLayoutId = record.id;
+  document.getElementById('scene-name').value = record.name;
+  renderSavedScenes();
+  setSceneMessage(`Loaded “${record.name}”.`);
+}
+function viewSavedScene(id) {
+  const record = savedScenes.find(scene => scene.id === id);
+  if (!record?.layout || readOnlyView) return;
+  editorBeforeView = {
+    layout: sceneSnapshot(),
+    activeLayoutId,
+    sceneName: document.getElementById('scene-name').value,
+    activeTemplate: document.querySelector('.scene.active')?.dataset.scene || null,
+    aiPlaying,
+    panels: {
+      paint: document.getElementById('paint-hud').hidden,
+      picker: document.getElementById('sprite-picker').hidden,
+      manager: document.getElementById('scene-manager').hidden,
+      events: document.getElementById('event-editor').hidden
+    }
+  };
+  applyLayout(record.layout);
+  readOnlyView = true;
+  document.body.classList.add('readonly');
+  canvas.style.pointerEvents = 'none';
+  document.getElementById('paint-hud').hidden = true;
+  document.getElementById('sprite-picker').hidden = true;
+  document.getElementById('scene-manager').hidden = true;
+  document.getElementById('event-editor').hidden = true;
+  document.getElementById('placed-controls').hidden = true;
+  document.getElementById('rukiya-controls').hidden = true;
+  document.getElementById('readonly-name').textContent = record.name;
+  document.getElementById('readonly-mode').textContent = 'Viewing';
+  document.getElementById('return-to-editor').hidden = false;
+  document.getElementById('pause-sequence').hidden = true;
+  document.getElementById('stop-sequence').hidden = true;
+  document.getElementById('readonly-bar').hidden = false;
+  document.getElementById('layout-toggle').setAttribute('aria-expanded', 'false');
+  document.getElementById('sprite-toggle').setAttribute('aria-expanded', 'false');
+  activeLayoutId = record.id;
+  renderSavedScenes();
+}
+function returnToEditor() {
+  if (!readOnlyView || !editorBeforeView) return;
+  const state = editorBeforeView;
+  applyLayout(state.layout);
+  activeLayoutId = state.activeLayoutId;
+  document.getElementById('scene-name').value = state.sceneName;
+  document.querySelectorAll('.scene').forEach(button => button.classList.toggle('active', button.dataset.scene === state.activeTemplate));
+  readOnlyView = false;
+  editorBeforeView = null;
+  document.body.classList.remove('readonly');
+  canvas.style.pointerEvents = '';
+  document.getElementById('readonly-bar').hidden = true;
+  document.getElementById('paint-hud').hidden = state.panels.paint;
+  document.getElementById('sprite-picker').hidden = state.panels.picker;
+  document.getElementById('scene-manager').hidden = state.panels.manager;
+  document.getElementById('event-editor').hidden = state.panels.events;
+  document.getElementById('layout-toggle').setAttribute('aria-expanded', String(!state.panels.manager));
+  document.getElementById('sprite-toggle').setAttribute('aria-expanded', String(!state.panels.picker));
+  aiPlaying = state.aiPlaying;
+  const playButton = document.getElementById('ai-toggle');
+  playButton.textContent = aiPlaying ? 'Pause NPCs' : 'Play NPCs';
+  playButton.setAttribute('aria-pressed', String(aiPlaying));
+  document.getElementById('pause-sequence').hidden = true;
+  document.getElementById('stop-sequence').hidden = true;
+  document.getElementById('return-to-editor').hidden = false;
+  document.getElementById('readonly-bar').hidden = true;
+  document.getElementById('readonly-mode').textContent = 'Viewing';
+  activeMessage = null;
+  sequencePlayback = null;
+  renderSavedScenes();
+}
+function renderSavedScenes() {
+  const list = document.getElementById('saved-scenes');
+  if (!list) return;
+  list.replaceChildren();
+  savedScenes.forEach((scene, index) => {
+    const row = document.createElement('div');
+    row.className = `saved-scene${scene.id === activeLayoutId ? ' active' : ''}`;
+    row.setAttribute('role', 'listitem');
+    row.draggable = true;
+    row.dataset.id = scene.id;
+    const load = document.createElement('button');
+    load.type = 'button'; load.className = 'load-scene'; load.textContent = `View: ${scene.name}`;
+    load.title = `View ${scene.name} without editing`;
+    load.addEventListener('click', () => viewSavedScene(scene.id));
+    const actions = document.createElement('div'); actions.className = 'scene-actions';
+    const actionButton = (text, label, action, disabled = false) => {
+      const button = document.createElement('button');
+      button.type = 'button'; button.textContent = text; button.title = label; button.setAttribute('aria-label', `${label}: ${scene.name}`); button.disabled = disabled;
+      button.addEventListener('click', action);
+      actions.append(button);
+    };
+    actionButton('Load', 'Load saved scene into editor', () => loadSavedScene(scene.id));
+    actionButton('Events', 'Edit this scene’s events', () => openEventEditor(scene.id));
+    actionButton('↑', 'Move up', () => moveSavedScene(index, index - 1), index === 0);
+    actionButton('↓', 'Move down', () => moveSavedScene(index, index + 1), index === savedScenes.length - 1);
+    actionButton('✎', 'Rename', () => renameSavedScene(scene.id));
+    actionButton('×', 'Delete', () => deleteSavedScene(scene.id));
+    row.append(load, actions);
+    row.addEventListener('dragstart', event => {
+      event.dataTransfer.setData('text/plain', scene.id);
+      event.dataTransfer.effectAllowed = 'move';
+      row.classList.add('dragging');
+    });
+    row.addEventListener('dragend', () => row.classList.remove('dragging'));
+    row.addEventListener('dragover', event => { event.preventDefault(); row.classList.add('over'); });
+    row.addEventListener('dragleave', () => row.classList.remove('over'));
+    row.addEventListener('drop', event => {
+      event.preventDefault(); row.classList.remove('over');
+      const from = savedScenes.findIndex(item => item.id === event.dataTransfer.getData('text/plain'));
+      const to = savedScenes.findIndex(item => item.id === scene.id);
+      if (from < 0 || to < 0 || from === to) return;
+      const [moved] = savedScenes.splice(from, 1);
+      const rect = row.getBoundingClientRect();
+      const insertAt = event.clientY > rect.top + rect.height / 2 ? to + (from < to ? 0 : 1) : to - (from < to ? 1 : 0);
+      savedScenes.splice(Math.max(0, Math.min(savedScenes.length, insertAt)), 0, moved);
+      persistScenes(); renderSavedScenes();
+    });
+    list.append(row);
+  });
+  if (!savedScenes.length) {
+    const empty = document.createElement('small'); empty.textContent = 'No saved scenes yet.'; list.append(empty);
+  }
+}
+function moveSavedScene(from, to) {
+  if (to < 0 || to >= savedScenes.length) return;
+  const [scene] = savedScenes.splice(from, 1);
+  savedScenes.splice(to, 0, scene);
+  persistScenes(); renderSavedScenes();
+}
+function renameSavedScene(id) {
+  const scene = savedScenes.find(item => item.id === id);
+  if (!scene) return;
+  const name = window.prompt('Rename scene', scene.name)?.trim();
+  if (!name || savedScenes.some(item => item.id !== id && item.name.toLocaleLowerCase() === name.toLocaleLowerCase())) return;
+  scene.name = name;
+  persistScenes(); renderSavedScenes();
+}
+function deleteSavedScene(id) {
+  const scene = savedScenes.find(item => item.id === id);
+  if (!scene || !window.confirm(`Delete “${scene.name}”?`)) return;
+  for (const saved of savedScenes) {
+    saved.events = (saved.events || []).filter(event => event.type !== 'transition' || event.sceneId !== id);
+  }
+  savedScenes = savedScenes.filter(item => item.id !== id);
+  if (activeLayoutId === id) activeLayoutId = null;
+  persistScenes(); renderSavedScenes();
+  setSceneMessage(`Deleted “${scene.name}”.`);
+}
+function ensureSceneSpriteIds(scene) {
+  if (!scene.layout || !Array.isArray(scene.layout.sprites)) return;
+  for (const item of scene.layout.sprites) {
+    if (!Number.isInteger(item.id)) item.id = nextSpriteId++;
+    else nextSpriteId = Math.max(nextSpriteId, item.id + 1);
+  }
+}
+function populateEventTargets(scene) {
+  const select = document.getElementById('event-target');
+  select.replaceChildren();
+  const playerOption = document.createElement('option');
+  playerOption.value = 'player'; playerOption.textContent = 'Rukiya'; select.append(playerOption);
+  for (const item of scene.layout?.sprites || []) {
+    const type = spriteTypes.find(value => value.id === item.type);
+    if (!type) continue;
+    const option = document.createElement('option');
+    option.value = String(item.id);
+    option.textContent = `${type.name} · #${item.id}`;
+    select.append(option);
+  }
+}
+function openEventEditor(id) {
+  if (readOnlyView) return;
+  const scene = savedScenes.find(item => item.id === id);
+  if (!scene) return;
+  ensureSceneSpriteIds(scene);
+  eventSceneId = id;
+  editingEventIndex = null;
+  document.getElementById('add-event').textContent = 'Add event';
+  document.getElementById('event-scene-name').textContent = `Events · ${scene.name}`;
+  populateEventTargets(scene);
+  const nextScene = document.getElementById('event-next-scene');
+  nextScene.replaceChildren();
+  for (const item of savedScenes.filter(item => item.id !== id)) {
+    const option = document.createElement('option'); option.value = item.id; option.textContent = item.name; nextScene.append(option);
+  }
+  document.getElementById('scene-manager').hidden = true;
+  document.getElementById('event-editor').hidden = false;
+  document.getElementById('layout-toggle').setAttribute('aria-expanded', 'false');
+  syncEventForm();
+  renderSceneEvents(scene);
+  persistScenes();
+}
+function syncEventForm() {
+  const type = document.getElementById('event-type').value;
+  const fields = {
+    target: ['move', 'visibility', 'dialogue'].includes(type),
+    move: type === 'move',
+    visibility: type === 'visibility',
+    text: type === 'narration' || type === 'dialogue',
+    duration: ['move', 'narration', 'dialogue', 'wait'].includes(type),
+    transition: type === 'transition'
+  };
+  document.querySelectorAll('[data-event-field]').forEach(field => {
+    field.hidden = !fields[field.dataset.eventField];
+  });
+}
+function eventDescription(event) {
+  const targetName = event.target === 'player' ? 'Rukiya' : (() => {
+    const saved = savedScenes.find(scene => scene.id === eventSceneId)?.layout?.sprites?.find(sprite => String(sprite.id) === String(event.target));
+    return spriteTypes.find(type => type.id === saved?.type)?.name || 'Sprite';
+  })();
+  if (event.type === 'move') return `Move ${targetName} to (${event.x}, ${event.y}) · ${event.duration}s`;
+  if (event.type === 'visibility') return `${event.visible ? 'Show' : 'Hide'} ${targetName}`;
+  if (event.type === 'narration') return `Narration · “${event.text}” · ${event.duration}s`;
+  if (event.type === 'dialogue') return `${targetName} says · “${event.text}” · ${event.duration}s`;
+  if (event.type === 'wait') return `Pause · ${event.duration}s`;
+  if (event.type === 'transition') return `Transition to ${savedScenes.find(scene => scene.id === event.sceneId)?.name || 'missing scene'}`;
+  return 'Event';
+}
+function renderSceneEvents(scene) {
+  const list = document.getElementById('scene-events');
+  list.replaceChildren();
+  const events = Array.isArray(scene.events) ? scene.events : (scene.events = []);
+  events.forEach((event, index) => {
+    const item = document.createElement('li'); item.className = 'scene-event';
+    const row = document.createElement('div'); row.className = 'scene-event-row';
+    const label = document.createElement('span'); label.textContent = eventDescription(event); row.append(label);
+    const action = (text, title, callback, disabled = false) => {
+      const button = document.createElement('button'); button.type = 'button'; button.textContent = text; button.title = title; button.disabled = disabled; button.addEventListener('click', callback); row.append(button);
+    };
+    action('↑', 'Move event up', () => reorderSceneEvent(index, index - 1), index === 0);
+    action('↓', 'Move event down', () => reorderSceneEvent(index, index + 1), index === events.length - 1);
+    action('✎', 'Edit event', () => editSceneEvent(index));
+    action('×', 'Remove event', () => {
+      if (editingEventIndex === index) { editingEventIndex = null; document.getElementById('add-event').textContent = 'Add event'; }
+      events.splice(index, 1); persistScenes(); renderSceneEvents(scene);
+    });
+    item.append(row); list.append(item);
+  });
+  if (!events.length) { const empty = document.createElement('small'); empty.textContent = 'No events yet.'; list.append(empty); }
+}
+function reorderSceneEvent(from, to) {
+  const events = savedScenes.find(scene => scene.id === eventSceneId)?.events;
+  if (!events || to < 0 || to >= events.length) return;
+  const [event] = events.splice(from, 1); events.splice(to, 0, event);
+  editingEventIndex = null;
+  document.getElementById('add-event').textContent = 'Add event';
+  persistScenes(); renderSceneEvents(savedScenes.find(scene => scene.id === eventSceneId));
+}
+function editSceneEvent(index) {
+  const scene = savedScenes.find(item => item.id === eventSceneId);
+  const event = scene?.events?.[index];
+  if (!event) return;
+  editingEventIndex = index;
+  document.getElementById('event-type').value = event.type;
+  syncEventForm();
+  if (event.target !== undefined) document.getElementById('event-target').value = String(event.target);
+  if (event.x !== undefined) document.getElementById('event-x').value = event.x;
+  if (event.y !== undefined) document.getElementById('event-y').value = event.y;
+  if (event.visible !== undefined) document.getElementById('event-visible').value = String(event.visible);
+  if (event.text !== undefined) document.getElementById('event-text').value = event.text;
+  if (event.duration !== undefined) document.getElementById('event-duration').value = event.duration;
+  if (event.sceneId) document.getElementById('event-next-scene').value = event.sceneId;
+  document.getElementById('add-event').textContent = 'Update event';
+}
+function addSceneEvent() {
+  const scene = savedScenes.find(item => item.id === eventSceneId);
+  if (!scene) return;
+  const type = document.getElementById('event-type').value;
+  const duration = Math.max(.1, Math.min(120, Number(document.getElementById('event-duration').value) || 2));
+  const event = { type };
+  if (['move', 'visibility', 'dialogue'].includes(type)) event.target = document.getElementById('event-target').value;
+  if (type === 'move') {
+    event.x = Math.max(0, Math.min(GRID - 1, Number(document.getElementById('event-x').value) || 0));
+    event.y = Math.max(0, Math.min(GRID - 1, Number(document.getElementById('event-y').value) || 0));
+    event.duration = duration;
+  } else if (type === 'visibility') {
+    event.visible = document.getElementById('event-visible').value === 'true';
+  } else if (type === 'narration' || type === 'dialogue') {
+    event.text = document.getElementById('event-text').value.trim();
+    if (!event.text) { document.getElementById('event-text').focus(); return; }
+    event.duration = duration;
+  } else if (type === 'wait') {
+    event.duration = duration;
+  } else if (type === 'transition') {
+    event.sceneId = document.getElementById('event-next-scene').value;
+    if (!event.sceneId) return;
+  }
+  scene.events ||= [];
+  if (editingEventIndex !== null && scene.events[editingEventIndex]) {
+    scene.events[editingEventIndex] = event;
+    editingEventIndex = null;
+    document.getElementById('add-event').textContent = 'Add event';
+  } else scene.events.push(event);
+  persistScenes(); renderSceneEvents(scene);
+}
+function eventTarget(id) {
+  return id === 'player' ? player : placedSprites.find(object => String(object.id) === String(id));
+}
+function setEventTargetPosition(target, x, y) {
+  target.x = x; target.y = y;
+  target.fromX = target.toX = x; target.fromY = target.toY = y;
+  if (target === player) target.moving = false;
+  if (target.type) target.aiMoving = false;
+}
+function startSceneSequence(id) {
+  const scene = savedScenes.find(item => item.id === id);
+  if (!scene?.layout) return;
+  viewSavedScene(id);
+  if (!readOnlyView) return;
+  sequencePlayback = { sceneId: id, eventIndex: 0, waitRemaining: 0, motion: null, paused: false, active: true };
+  activeMessage = null;
+  document.getElementById('readonly-mode').textContent = 'Playing';
+  document.getElementById('readonly-name').textContent = scene.name;
+  document.getElementById('return-to-editor').hidden = false;
+  document.getElementById('pause-sequence').hidden = false;
+  document.getElementById('pause-sequence').textContent = 'Pause';
+  document.getElementById('stop-sequence').hidden = false;
+}
+function tickSceneSequence(dt) {
+  const playback = sequencePlayback;
+  if (!playback?.active || playback.paused) return;
+  if (playback.motion) {
+    playback.motion.elapsed += dt;
+    if (playback.motion.elapsed >= playback.motion.duration) {
+      const motion = playback.motion;
+      const target = eventTarget(motion.target);
+      if (target) setEventTargetPosition(target, motion.toX, motion.toY);
+      playback.motion = null;
+      playback.eventIndex++;
+    }
+    return;
+  }
+  if (playback.waitRemaining > 0) {
+    playback.waitRemaining = Math.max(0, playback.waitRemaining - dt);
+    if (!playback.waitRemaining) activeMessage = null;
+    return;
+  }
+  const scene = savedScenes.find(item => item.id === playback.sceneId);
+  const events = scene?.events || [];
+  if (playback.eventIndex >= events.length) {
+    playback.active = false;
+    activeMessage = null;
+    document.getElementById('readonly-mode').textContent = 'Finished';
+    document.getElementById('pause-sequence').hidden = true;
+    document.getElementById('stop-sequence').hidden = true;
+    return;
+  }
+  const event = events[playback.eventIndex];
+  if (event.type === 'move') {
+    const target = eventTarget(event.target);
+    if (!target) { playback.eventIndex++; return; }
+    const from = entityPosition(target);
+    playback.motion = {
+      target: event.target, fromX: from.x, fromY: from.y,
+      toX: Math.max(0, Math.min(GRID - 1, event.x)),
+      toY: Math.max(0, Math.min(GRID - 1, event.y)),
+      duration: Math.max(.1, event.duration || 1), elapsed: 0
+    };
+    const dx = playback.motion.toX - from.x, dy = playback.motion.toY - from.y;
+    const direction = Math.abs(dx) > Math.abs(dy) ? (dx >= 0 ? 1 : 3) : (dy >= 0 ? 0 : 2);
+    if (target === player) player.direction = direction;
+    else if (target.type) target.frame = target.type.animated ? direction : Math.round(direction * target.type.frames / 4) % target.type.frames;
+    return;
+  }
+  if (event.type === 'visibility') {
+    const target = eventTarget(event.target);
+    if (target) target.visible = event.visible !== false;
+    playback.eventIndex++;
+    return;
+  }
+  if (event.type === 'wait') {
+    playback.eventIndex++;
+    playback.waitRemaining = Math.max(.1, event.duration || 1);
+    return;
+  }
+  if (event.type === 'narration' || event.type === 'dialogue') {
+    playback.eventIndex++;
+    activeMessage = { kind: event.type, text: event.text || '', target: event.target || null };
+    playback.waitRemaining = Math.max(.1, event.duration || 2);
+    return;
+  }
+  if (event.type === 'transition') {
+    const next = savedScenes.find(item => item.id === event.sceneId);
+    playback.eventIndex++;
+    if (!next?.layout) return;
+    applyLayout(next.layout);
+    activeMessage = null;
+    playback.sceneId = next.id;
+    playback.eventIndex = 0;
+    activeLayoutId = next.id;
+    document.getElementById('readonly-name').textContent = next.name;
+    renderSavedScenes();
+    return;
+  }
+  playback.eventIndex++;
+}
+function entityPosition(target) {
+  const motion = sequencePlayback?.motion;
+  if (motion && String(motion.target) === String(target === player ? 'player' : target.id)) {
+    const progress = Math.min(1, motion.elapsed / motion.duration);
+    return { x: motion.fromX + (motion.toX - motion.fromX) * progress, y: motion.fromY + (motion.toY - motion.fromY) * progress };
+  }
+  if (target === player && player.moving) {
+    const progress = Math.min(1, player.elapsed / .18);
+    return { x: player.fromX + (player.toX - player.fromX) * progress, y: player.fromY + (player.toY - player.fromY) * progress };
+  }
+  if (target.type && target.aiMoving) {
+    const progress = Math.min(1, target.aiElapsed / target.aiDuration);
+    return { x: target.fromX + (target.toX - target.fromX) * progress, y: target.fromY + (target.toY - target.fromY) * progress };
+  }
+  return { x: target.x, y: target.y };
+}
+function drawActiveMessage(view) {
+  if (!activeMessage?.text) return;
+  ctx.save();
+  ctx.font = '14px system-ui, sans-serif';
+  ctx.textBaseline = 'top';
+  const maxWidth = Math.max(160, Math.min(340, window.innerWidth - 32));
+  const padding = 11, lineHeight = 19;
+  const words = activeMessage.text.split(/\s+/);
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (line && ctx.measureText(candidate).width > maxWidth - padding * 2) { lines.push(line); line = word; }
+    else line = candidate;
+  }
+  if (line) lines.push(line);
+  const textWidth = Math.min(maxWidth - padding * 2, Math.max(...lines.map(text => ctx.measureText(text).width), 0));
+  const width = textWidth + padding * 2;
+  const height = lines.length * lineHeight + padding * 2;
+  let centerX = window.innerWidth / 2;
+  let top = 62;
+  if (activeMessage.kind === 'dialogue') {
+    const target = eventTarget(activeMessage.target);
+    if (target) {
+      const position = entityPosition(target);
+      centerX = view.left + (position.x + .5) * view.size;
+      const targetHeight = target === player ? 1.5 : target.type.height * target.scale;
+      top = view.top + (position.y + 1 - targetHeight) * view.size - height - 8;
+    }
+  }
+  const x = Math.max(8, Math.min(window.innerWidth - width - 8, centerX - width / 2));
+  top = Math.max(8, Math.min(window.innerHeight - height - 8, top));
+  ctx.fillStyle = 'rgba(14, 22, 17, 0.94)'; ctx.strokeStyle = '#c7d8c8'; ctx.lineWidth = 1;
+  ctx.fillRect(x, top, width, height); ctx.strokeRect(x + .5, top + .5, width - 1, height - 1);
+  ctx.fillStyle = '#f2f5ef';
+  lines.forEach((text, index) => ctx.fillText(text, x + padding, top + padding + index * lineHeight, maxWidth - padding * 2));
+  ctx.restore();
 }
 
 function getViewport() {
@@ -363,6 +1094,7 @@ function render(now) {
     if (player.elapsed >= .18) { player.x = player.toX; player.y = player.toY; player.moving = false; }
   }
   updateAIs(dt);
+  tickSceneSequence(dt);
   syncRukiyaControls();
   syncPlacedControls();
   const view = getViewport();
@@ -371,11 +1103,13 @@ function render(now) {
   ctx.save();
   ctx.translate(view.left, view.top);
   for (let y = 0; y < GRID; y++) for (let x = 0; x < GRID; x++) drawTile(x, y, terrain[y][x], tile);
-  const t = player.moving ? Math.min(1, player.elapsed / .18) : 1;
-  const footX = (player.fromX + (player.toX - player.fromX) * t) * tile + tile / 2;
-  const footY = (player.fromY + (player.toY - player.fromY) * t) * tile + tile;
+  const playerPosition = entityPosition(player);
+  const footX = playerPosition.x * tile + tile / 2;
+  const footY = (playerPosition.y + 1) * tile;
   const drawPlayer = () => {
-    const walkFrame = player.moving ? Math.floor(player.anim * 8) % 8 : 0;
+    if (player.visible === false) return;
+    const scriptedWalk = sequencePlayback?.motion?.target === 'player';
+    const walkFrame = player.moving || scriptedWalk ? Math.floor(performance.now() / 110) % 8 : 0;
     if (sprite.complete && sprite.naturalWidth) {
       ctx.drawImage(sprite, walkFrame * 128, player.direction * 128, 128, 128, footX - tile * .75, footY - tile * 1.5, tile * 1.5, tile * 1.5);
     } else {
@@ -384,24 +1118,25 @@ function render(now) {
     }
   };
   const drawPlaced = object => {
-    const progress = object.aiMoving ? Math.min(1, object.aiElapsed / object.aiDuration) : 1;
-    const tileX = object.aiMoving ? object.fromX + (object.toX - object.fromX) * progress : object.x;
-    const tileY = object.aiMoving ? object.fromY + (object.toY - object.fromY) * progress : object.y;
+    if (object.visible === false) return;
+    const position = entityPosition(object);
+    const tileX = position.x;
+    const tileY = position.y;
     const w = object.type.width * object.scale * tile, h = object.type.height * object.scale * tile;
     const x = (tileX + .5) * tile - w / 2, y = (tileY + 1) * tile - h;
-    const walkFrame = object.aiMoving && object.type.animated ? Math.floor(object.aiElapsed * 12) % 8 : 0;
+    const scriptedWalk = String(sequencePlayback?.motion?.target) === String(object.id);
+    const walkFrame = (object.aiMoving || scriptedWalk) && object.type.animated ? Math.floor(performance.now() / 110) % 8 : 0;
     drawSpriteFrame(ctx, object.type, object.frame, x, y, w, h, walkFrame);
     if (selectedSprite === object) {
       ctx.strokeStyle = '#e5f4a5'; ctx.lineWidth = 1.5;
       ctx.strokeRect(object.x * tile + 3, object.y * tile + 3, tile - 6, tile - 6);
     }
   };
-  const renderOrder = [...placedSprites.map(object => {
-    const progress = object.aiMoving ? Math.min(1, object.aiElapsed / object.aiDuration) : 1;
-    return { y: (object.aiMoving ? object.fromY + (object.toY - object.fromY) * progress : object.y) + 1, draw: () => drawPlaced(object) };
-  }), { y: player.fromY + (player.toY - player.fromY) * t + 1, draw: drawPlayer }];
+  const renderOrder = [...placedSprites.filter(object => object.visible !== false).map(object => ({ y: entityPosition(object).y + 1, draw: () => drawPlaced(object) }))];
+  if (player.visible !== false) renderOrder.push({ y: playerPosition.y + 1, draw: drawPlayer });
   renderOrder.sort((a, b) => a.y - b.y).forEach(item => item.draw());
   ctx.restore();
+  drawActiveMessage(view);
   requestAnimationFrame(render);
 }
 
@@ -426,8 +1161,50 @@ buildSpritePicker();
 const picker = document.getElementById('sprite-picker');
 document.getElementById('sprite-toggle').addEventListener('click', event => {
   picker.hidden = !picker.hidden;
+  if (!picker.hidden) {
+    sceneManager.hidden = true;
+    document.getElementById('event-editor').hidden = true;
+    document.getElementById('layout-toggle').setAttribute('aria-expanded', 'false');
+  }
   event.currentTarget.setAttribute('aria-expanded', String(!picker.hidden));
 });
+const sceneManager = document.getElementById('scene-manager');
+document.getElementById('layout-toggle').addEventListener('click', event => {
+  sceneManager.hidden = !sceneManager.hidden;
+  if (!sceneManager.hidden) {
+    picker.hidden = true;
+    document.getElementById('event-editor').hidden = true;
+    document.getElementById('sprite-toggle').setAttribute('aria-expanded', 'false');
+  }
+  event.currentTarget.setAttribute('aria-expanded', String(!sceneManager.hidden));
+});
+document.getElementById('save-scene').addEventListener('click', saveCurrentScene);
+document.getElementById('export-document').addEventListener('click', exportDocument);
+const documentFile = document.getElementById('document-file');
+document.getElementById('import-document').addEventListener('click', () => documentFile.click());
+documentFile.addEventListener('change', async () => {
+  const file = documentFile.files?.[0];
+  await importDocument(file);
+  documentFile.value = '';
+});
+document.getElementById('scene-name').addEventListener('keydown', event => {
+  if (event.key === 'Enter') saveCurrentScene();
+});
+renderSavedScenes();
+document.getElementById('event-type').addEventListener('change', syncEventForm);
+document.getElementById('add-event').addEventListener('click', addSceneEvent);
+document.getElementById('play-sequence').addEventListener('click', () => startSceneSequence(eventSceneId));
+document.getElementById('close-events').addEventListener('click', () => {
+  document.getElementById('event-editor').hidden = true;
+  sceneManager.hidden = false;
+  document.getElementById('layout-toggle').setAttribute('aria-expanded', 'true');
+});
+document.getElementById('pause-sequence').addEventListener('click', event => {
+  if (!sequencePlayback?.active) return;
+  sequencePlayback.paused = !sequencePlayback.paused;
+  event.currentTarget.textContent = sequencePlayback.paused ? 'Resume' : 'Pause';
+});
+document.getElementById('stop-sequence').addEventListener('click', returnToEditor);
 document.querySelectorAll('[data-facing]').forEach(button => button.addEventListener('click', () => {
   player.direction = Number(button.dataset.facing);
   showRukiyaControls(true);
@@ -485,6 +1262,7 @@ canvas.addEventListener('pointerdown', event => {
   canvas.setPointerCapture(event.pointerId);
   const point = pointAt(event);
   const hitSprite = [...placedSprites].reverse().find(object => {
+    if (object.visible === false) return false;
     const width = object.type.width * object.scale * point.tile, height = object.type.height * object.scale * point.tile;
     const left = (object.x + .5) * point.tile - width / 2;
     const bottom = (object.y + 1) * point.tile;
@@ -536,6 +1314,8 @@ canvas.addEventListener('pointermove', event => {
 canvas.addEventListener('pointerup', () => { paintDown = false; lastPaintCell = null; });
 canvas.addEventListener('pointercancel', () => { paintDown = false; lastPaintCell = null; });
 window.addEventListener('keydown', event => {
+  if (readOnlyView) return;
+  if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
   if (brush !== 'walk' || player.moving || event.repeat) return;
   const key = event.key.toLowerCase();
   const direction = ({ w: [0, -1], arrowup: [0, -1], s: [0, 1], arrowdown: [0, 1], a: [-1, 0], arrowleft: [-1, 0], d: [1, 0], arrowright: [1, 0] })[key];
@@ -543,11 +1323,13 @@ window.addEventListener('keydown', event => {
 });
 window.addEventListener('resize', resize);
 window.addEventListener('keydown', event => {
+  if (readOnlyView && event.key === 'Escape') { returnToEditor(); return; }
   if (event.key === 'Escape' && armedSprite) {
     armedSprite = null;
     document.querySelectorAll('.sprite-choice').forEach(button => button.classList.remove('active'));
     canvas.style.cursor = 'default';
   }
 });
+document.getElementById('return-to-editor').addEventListener('click', returnToEditor);
 resize();
 requestAnimationFrame(render);
