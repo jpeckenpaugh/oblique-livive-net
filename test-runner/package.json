@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node runner.mjs"
+    "test": "node runner.mjs",
+    "test:ai": "node ai-smoke.mjs"
   },
   "dependencies": {
     "playwright": "1.55.0"

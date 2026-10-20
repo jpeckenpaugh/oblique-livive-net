@@ -31,6 +31,12 @@ git clone git@github.com:jpeckenpaugh/oblique-livive-net.git
 - Custom local image and sprite-sheet loading in the main sandbox
 - Scene templates, locally saved layouts, document import/export, and ordered scene events in the Playground
 
+## AI integrations
+
+The Playground includes an **AI Studio** drawer for browser-direct image and 3D generation. Meshy works directly from the static site. The OpenCode-compatible provider only works with an endpoint that serves an image model and sends CORS headers; the official OpenCode API does not do either today, and no relay is included. Keys are stored in this browser profile and can be removed with **Forget all**.
+
+See [docs/ai-integrations.md](docs/ai-integrations.md) for setup, browser support, credential security, costs, and troubleshooting. The mocked Playwright coverage runs with `cd test-runner && npm run test:ai`.
+
 ## Run locally
 
 The pages use browser ES modules and load local image assets, so open them through an HTTP server rather than directly as `file://` URLs:
@@ -70,6 +76,9 @@ src/entities/               Player, props, NPCs, and collision
 src/render/                 Camera, sprite renderer, shadows, debug views
 src/terrain/                Terrain maps, textures, rendering, and grass flow
 src/ui/                     Sprite editor, terrain painter, and controls
+src/integrations/           AI Studio, provider clients, IndexedDB assets, sprite registry
+docs/                       Setup and integration documentation
+test-runner/                Playwright demo and mocked AI smoke tests
 *.webp / *.json             Sprite sheets and animation descriptors
 ```
 
