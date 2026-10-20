@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Playground</title>
   <link rel="stylesheet" href="css/playground.css">
+  <link rel="stylesheet" href="css/ai-studio.css">
 </head>
 <body>
   <canvas id="playground" aria-label="10 by 10 grass playground"></canvas>
@@ -12,6 +13,7 @@
   <button id="sprite-toggle" aria-expanded="false" aria-controls="sprite-picker">Sprites</button>
   <button id="layout-toggle" aria-expanded="false" aria-controls="scene-manager">Scenes</button>
   <button id="ai-toggle" aria-pressed="false">Play NPCs</button>
+  <button id="ai-studio-toggle" type="button" aria-expanded="false" aria-controls="ai-studio" aria-haspopup="dialog">AI</button>
   <div id="readonly-bar" hidden>
     <span><span id="readonly-mode">Viewing</span> <strong id="readonly-name"></strong></span>
     <button id="return-to-editor" type="button">Return to editing</button>
@@ -127,6 +129,180 @@
       <button id="set-location" type="button">Go</button>
     </div>
   </section>
+  <aside id="ai-studio" hidden role="dialog" aria-modal="true" aria-labelledby="ai-studio-title">
+    <div class="ai-studio-header">
+      <div>
+        <strong id="ai-studio-title">AI Studio</strong>
+        <span class="ai-studio-subtitle">Generate images and 3D models from this browser</span>
+      </div>
+      <button id="ai-studio-close" type="button" aria-label="Close AI Studio">×</button>
+    </div>
+    <div class="ai-tabs" role="tablist" aria-label="AI Studio sections">
+      <button id="ai-tab-image" class="ai-tab" type="button" role="tab" aria-selected="true" aria-controls="ai-panel-image" tabindex="0">Image</button>
+      <button id="ai-tab-3d" class="ai-tab" type="button" role="tab" aria-selected="false" aria-controls="ai-panel-3d" tabindex="-1">3D</button>
+      <button id="ai-tab-settings" class="ai-tab" type="button" role="tab" aria-selected="false" aria-controls="ai-panel-settings" tabindex="-1">Settings</button>
+    </div>
+
+    <section id="ai-panel-image" class="ai-panel" role="tabpanel" aria-labelledby="ai-tab-image">
+      <div class="ai-field">
+        <label for="ai-image-provider">Provider</label>
+        <select id="ai-image-provider">
+          <option value="meshy">Meshy</option>
+          <option value="opencode">OpenCode-compatible endpoint</option>
+        </select>
+      </div>
+      <div id="ai-image-opencode-note" class="ai-notice" hidden>
+        <strong>OpenCode image generation is limited in the browser.</strong>
+        <p id="ai-image-opencode-detail">The official OpenCode API has no image models and does not send CORS headers. A CORS-enabled OpenAI-compatible image endpoint is required.</p>
+        <button id="ai-image-open-settings" class="ai-link-button" type="button">Open the base URL setting</button>
+      </div>
+      <div class="ai-field">
+        <label for="ai-image-prompt">Prompt</label>
+        <textarea id="ai-image-prompt" rows="3" maxlength="2000" placeholder="A mossy stone lantern, game asset, transparent background"></textarea>
+      </div>
+      <div id="ai-image-meshy-model-field" class="ai-field">
+        <label for="ai-image-meshy-model">Meshy model</label>
+        <select id="ai-image-meshy-model">
+          <option value="nano-banana">nano-banana</option>
+          <option value="nano-banana-2">nano-banana-2</option>
+          <option value="nano-banana-2-lite">nano-banana-2-lite</option>
+          <option value="nano-banana-pro">nano-banana-pro</option>
+          <option value="gpt-image-2">gpt-image-2</option>
+          <option value="gpt-image-2-5-flare">gpt-image-2-5-flare</option>
+          <option value="gpt-image-2-5-sunburst">gpt-image-2-5-sunburst</option>
+        </select>
+      </div>
+      <div id="ai-image-opencode-model-field" class="ai-field" hidden>
+        <label for="ai-image-opencode-model">OpenCode image model</label>
+        <input id="ai-image-opencode-model" type="text" autocomplete="off" spellcheck="false" placeholder="Model id returned by the endpoint">
+        <small class="ai-hint" id="ai-image-opencode-models"></small>
+      </div>
+      <div class="ai-row">
+        <div class="ai-field">
+          <label for="ai-image-aspect">Aspect ratio</label>
+          <select id="ai-image-aspect">
+            <option value="1:1">1:1 square</option>
+            <option value="16:9">16:9 landscape</option>
+            <option value="9:16">9:16 portrait</option>
+            <option value="4:3">4:3 landscape</option>
+            <option value="3:4">3:4 portrait</option>
+          </select>
+        </div>
+        <label id="ai-image-remove-bg-field" class="ai-check" for="ai-image-remove-bg"><input id="ai-image-remove-bg" type="checkbox"> Remove background</label>
+      </div>
+      <button id="ai-image-generate" class="ai-primary" type="button">Generate image</button>
+      <p class="ai-hint" id="ai-image-cost">Meshy image generations spend credits from your Meshy account.</p>
+      <progress id="ai-image-progress" max="100" value="0" aria-label="Image generation progress" hidden></progress>
+      <div id="ai-image-status" class="ai-status" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div id="ai-image-empty" class="ai-empty">No image yet. Generate one to preview, download, and add it to the scene.</div>
+      <div id="ai-image-result" class="ai-result" hidden>
+        <img id="ai-image-preview" alt="Preview of the generated image" hidden>
+        <dl class="ai-meta">
+          <div><dt>Dimensions</dt><dd id="ai-image-dimensions">—</dd></div>
+          <div><dt>Provider</dt><dd id="ai-image-meta-provider">—</dd></div>
+        </dl>
+        <div class="ai-actions">
+          <button id="ai-image-add" class="ai-primary" type="button">Add to scene</button>
+          <button id="ai-image-download" type="button">Download</button>
+          <button id="ai-image-regenerate" type="button">Regenerate</button>
+        </div>
+        <p id="ai-image-note" class="ai-hint"></p>
+      </div>
+    </section>
+
+    <section id="ai-panel-3d" class="ai-panel" role="tabpanel" aria-labelledby="ai-tab-3d" hidden>
+      <div class="ai-field">
+        <label for="ai-3d-prompt">Prompt</label>
+        <textarea id="ai-3d-prompt" rows="3" maxlength="2000" placeholder="A weathered wooden crate, game-ready prop"></textarea>
+      </div>
+      <div class="ai-row">
+        <div class="ai-field">
+          <label for="ai-3d-model">Meshy model</label>
+          <select id="ai-3d-model">
+            <option value="meshy-5">meshy-5</option>
+            <option value="meshy-4">meshy-4</option>
+          </select>
+        </div>
+        <div class="ai-field">
+          <label for="ai-3d-mode">Stage</label>
+          <select id="ai-3d-mode">
+            <option value="preview">Preview</option>
+            <option value="refine">Refine</option>
+          </select>
+        </div>
+      </div>
+      <p class="ai-hint" id="ai-3d-refine-hint" hidden></p>
+      <button id="ai-3d-generate" class="ai-primary" type="button">Generate 3D model</button>
+      <p class="ai-hint" id="ai-3d-cost">3D generations spend Meshy credits. Preview costs less than refine.</p>
+      <progress id="ai-3d-progress" max="100" value="0" aria-label="3D generation progress" hidden></progress>
+      <div id="ai-3d-status" class="ai-status" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div id="ai-3d-empty" class="ai-empty">No 3D model yet. Generate a preview, then refine it if you want more detail.</div>
+      <div id="ai-3d-result" class="ai-result" hidden>
+        <img id="ai-3d-preview" alt="Preview thumbnail of the generated 3D model" hidden>
+        <dl class="ai-meta">
+          <div><dt>Stage</dt><dd id="ai-3d-meta-stage">—</dd></div>
+          <div><dt>Model</dt><dd id="ai-3d-meta-model">—</dd></div>
+        </dl>
+        <div class="ai-actions">
+          <button id="ai-3d-download" class="ai-primary" type="button">Download GLB</button>
+          <button id="ai-3d-open" type="button">Open GLB</button>
+          <button id="ai-3d-refine" type="button" hidden>Refine this model</button>
+        </div>
+        <p id="ai-3d-note" class="ai-hint"></p>
+      </div>
+    </section>
+
+    <section id="ai-panel-settings" class="ai-panel" role="tabpanel" aria-labelledby="ai-tab-settings" hidden>
+      <p class="ai-notice" id="ai-settings-warning"><strong>Keys stay in this browser.</strong>Anyone using this browser profile can read them, and a stored key can spend Meshy credits or OpenCode tokens. Use session-only storage on a shared computer.</p>
+
+      <fieldset class="ai-settings-group">
+        <legend>Meshy</legend>
+        <div class="ai-field">
+          <label for="ai-meshy-key">API key</label>
+          <div class="ai-key-row">
+            <input id="ai-meshy-key" type="password" autocomplete="off" spellcheck="false" placeholder="msy_…">
+            <button id="ai-meshy-reveal" type="button" aria-pressed="false" aria-label="Show Meshy API key">Show</button>
+          </div>
+        </div>
+        <label class="ai-check" for="ai-meshy-remember"><input id="ai-meshy-remember" type="checkbox" checked> Remember on this device</label>
+        <div class="ai-actions">
+          <button id="ai-meshy-test" type="button">Test and show balance</button>
+          <button id="ai-meshy-clear" type="button">Clear</button>
+        </div>
+        <div id="ai-meshy-status" class="ai-status" role="status" aria-live="polite" aria-atomic="true"></div>
+      </fieldset>
+
+      <fieldset class="ai-settings-group">
+        <legend>OpenCode-compatible endpoint</legend>
+        <div class="ai-field">
+          <label for="ai-opencode-base-url">Base URL</label>
+          <input id="ai-opencode-base-url" type="url" autocomplete="off" spellcheck="false" placeholder="https://opencode.ai/inference/openai/v1">
+        </div>
+        <div class="ai-field">
+          <label for="ai-opencode-key">API key</label>
+          <div class="ai-key-row">
+            <input id="ai-opencode-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
+            <button id="ai-opencode-reveal" type="button" aria-pressed="false" aria-label="Show OpenCode API key">Show</button>
+          </div>
+        </div>
+        <div class="ai-field">
+          <label for="ai-opencode-model">Model</label>
+          <input id="ai-opencode-model" type="text" autocomplete="off" spellcheck="false" placeholder="gpt-image-1">
+        </div>
+        <label class="ai-check" for="ai-opencode-remember"><input id="ai-opencode-remember" type="checkbox" checked> Remember on this device</label>
+        <div class="ai-actions">
+          <button id="ai-opencode-test" type="button">Test connection</button>
+          <button id="ai-opencode-clear" type="button">Clear</button>
+        </div>
+        <div id="ai-opencode-status" class="ai-status" role="status" aria-live="polite" aria-atomic="true"></div>
+      </fieldset>
+
+      <div class="ai-danger">
+        <button id="ai-forget-all" type="button">Forget all keys</button>
+      </div>
+    </section>
+  </aside>
   <script type="module" src="src/playground.js"></script>
+  <script type="module" src="src/integrations/ai-studio.js"></script>
 </body>
 </html>
