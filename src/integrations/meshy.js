@@ -339,7 +339,7 @@ export async function createTextTo3D({ prompt, aiModel, mode = 'preview', previe
       });
     }
     body.prompt = prompt.trim();
-    body.ai_model = aiModel || 'meshy-5';
+    body.ai_model = aiModel || 'latest';
   }
   const { data } = await request('/v2/text-to-3d', { method: 'POST', body, signal });
   const taskId = taskIdFrom(data);
@@ -356,7 +356,7 @@ export async function get3D(taskId, options = {}) {
   return task;
 }
 
-export async function createImageTo3D({ imageUrl, inputTaskId, aiModel = 'meshy-5', options = {}, signal } = {}) {
+export async function createImageTo3D({ imageUrl, inputTaskId, aiModel = 'latest', options = {}, signal } = {}) {
   if (!imageUrl && !inputTaskId) {
     throw new MeshyError('MESHY_INVALID_REQUEST', 'An image URL or text-to-image task id is required.', {
       action: 'Provide an image or a completed image task.'
@@ -366,7 +366,7 @@ export async function createImageTo3D({ imageUrl, inputTaskId, aiModel = 'meshy-
   for (const [key, value] of Object.entries(options)) {
     if (value !== undefined) body[key] = value;
   }
-  body.ai_model = aiModel || 'meshy-5';
+  body.ai_model = aiModel || 'latest';
   if (inputTaskId) body.input_task_id = inputTaskId;
   else body.image_url = imageUrl;
   const { data } = await request('/v1/image-to-3d', { method: 'POST', body, signal });

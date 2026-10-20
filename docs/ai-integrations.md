@@ -34,7 +34,7 @@ For game-ready props, enable **Remove background**. Meshy returns a transparent 
 
 The **3D** tab sends a Meshy Text to 3D task:
 
-1. Generate a **Preview** with a prompt and a `meshy-4` or `meshy-5` model.
+1. Generate a **Preview** with a prompt and a current model (`latest` / `meshy-7.1`, `meshy-6`, or `meshy-6-lite`).
 2. Optionally switch **Stage** to **Refine** and generate again. Refine reuses the last successful preview task.
 3. The result card provides thumbnails plus **Download GLB** and **Open GLB**.
 
