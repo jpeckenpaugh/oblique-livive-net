@@ -1,3 +1,5 @@
+import { restoreCustomSprites, setSpriteRegistrar } from './integrations/sprite-registry.js';
+
 const SIZE = 64;
 const GRID = 16;
 const PAD = 0;
@@ -872,42 +874,47 @@ function drawSpriteFrame(context, type, frame, x, y, width, height, animationFra
   context.drawImage(type.img, frameX, frameY, type.fw, type.fh, x, y, width, height);
   return true;
 }
-function buildSpritePicker() {
+function addSpritePickerButton(type) {
   const list = document.getElementById('sprite-list');
-  for (const type of spriteTypes) {
-    const button = document.createElement('button');
-    button.className = 'sprite-choice';
-    button.type = 'button';
-    button.dataset.sprite = type.id;
-    const preview = document.createElement('canvas');
-    preview.width = preview.height = 56;
-    const label = document.createElement('span');
-    label.textContent = type.name;
-    button.append(preview, label);
-    list.append(button);
-    const paintPreview = () => {
-      const pctx = preview.getContext('2d');
-      pctx.clearRect(0, 0, preview.width, preview.height);
-      const scale = Math.min(48 / type.fw, 48 / type.fh);
-      drawSpriteFrame(pctx, type, 0, (56 - type.fw * scale) / 2, (56 - type.fh * scale) / 2, type.fw * scale, type.fh * scale);
-    };
-    type.img.addEventListener('load', paintPreview);
-    paintPreview();
-    button.addEventListener('click', () => {
-      armedSprite = type;
-      selectedSprite = null;
-      showRukiyaControls(false);
-      document.getElementById('placed-controls').hidden = true;
-      document.querySelectorAll('.sprite-choice').forEach(item => item.classList.toggle('active', item === button));
-      document.querySelectorAll('.brush').forEach(item => {
-        const active = item.dataset.tool === 'walk';
-        item.classList.toggle('active', active);
-        item.setAttribute('aria-pressed', String(active));
-      });
-      brush = 'walk';
-      canvas.style.cursor = 'copy';
+  if (!list) return null;
+  if ([...list.querySelectorAll('.sprite-choice')].some(item => item.dataset.sprite === type.id)) return null;
+  const button = document.createElement('button');
+  button.className = 'sprite-choice';
+  button.type = 'button';
+  button.dataset.sprite = type.id;
+  const preview = document.createElement('canvas');
+  preview.width = preview.height = 56;
+  const label = document.createElement('span');
+  label.textContent = type.name;
+  button.append(preview, label);
+  list.append(button);
+  const paintPreview = () => {
+    if (!type.img || !type.fw || !type.fh) return;
+    const pctx = preview.getContext('2d');
+    pctx.clearRect(0, 0, preview.width, preview.height);
+    const scale = Math.min(48 / type.fw, 48 / type.fh);
+    drawSpriteFrame(pctx, type, 0, (56 - type.fw * scale) / 2, (56 - type.fh * scale) / 2, type.fw * scale, type.fh * scale);
+  };
+  if (type.img?.addEventListener) type.img.addEventListener('load', paintPreview);
+  if (type.img?.complete) paintPreview();
+  button.addEventListener('click', () => {
+    armedSprite = type;
+    selectedSprite = null;
+    showRukiyaControls(false);
+    document.getElementById('placed-controls').hidden = true;
+    document.querySelectorAll('.sprite-choice').forEach(item => item.classList.toggle('active', item === button));
+    document.querySelectorAll('.brush').forEach(item => {
+      const active = item.dataset.tool === 'walk';
+      item.classList.toggle('active', active);
+      item.setAttribute('aria-pressed', String(active));
     });
-  }
+    brush = 'walk';
+    canvas.style.cursor = 'copy';
+  });
+  return button;
+}
+function buildSpritePicker() {
+  for (const type of spriteTypes) addSpritePickerButton(type);
 }
 function showPlacedControls(object) {
   if (object) selectWalkTool();
@@ -933,7 +940,8 @@ function showPlacedControls(object) {
   document.querySelectorAll('.sprite-choice').forEach(button => button.classList.toggle('active', button.dataset.sprite === object.type.id));
 }
 function placeSprite(type, x, y) {
-  if (placedSprites.some(object => object.x === x && object.y === y && object.type.id === type.id)) return;
+  const existing = placedSprites.find(object => object.x === x && object.y === y && object.type.id === type.id);
+  if (existing) return existing;
   const object = {
     id: nextSpriteId++, type, x, y, frame: 0,
     scale: type.defaultScale || 1,
@@ -948,6 +956,74 @@ function placeSprite(type, x, y) {
   // Keep the picker armed so repeated clicks or drags can paint more copies.
   selectedSprite = null;
   document.getElementById('placed-controls').hidden = true;
+  return object;
+}
+function registerSpriteType(type) {
+  if (!type || typeof type.id !== 'string' || !type.id) throw new TypeError('A sprite type needs an id.');
+  const existing = spriteTypes.find(item => item.id === type.id);
+  if (existing) {
+    Object.assign(existing, type, {
+      cols: Math.max(1, Math.floor(Number(type.cols ?? existing.cols) || 1)),
+      frames: Math.max(1, Math.floor(Number(type.frames ?? existing.frames) || 1)),
+      fw: Math.max(0, Number(type.fw ?? existing.fw) || 0),
+      fh: Math.max(0, Number(type.fh ?? existing.fh) || 0),
+      width: Number(type.width ?? existing.width) > 0 ? Number(type.width ?? existing.width) : 1,
+      height: Number(type.height ?? existing.height) > 0 ? Number(type.height ?? existing.height) : 1,
+      defaultScale: Number(type.defaultScale ?? existing.defaultScale) > 0 ? Number(type.defaultScale ?? existing.defaultScale) : 1,
+      animated: type.animated ?? existing.animated
+    });
+    addSpritePickerButton(existing);
+    return existing;
+  }
+  const entry = { ...type };
+  entry.cols = Math.max(1, Math.floor(Number(entry.cols) || 1));
+  entry.frames = Math.max(1, Math.floor(Number(entry.frames) || 1));
+  entry.fw = Math.max(0, Number(entry.fw) || 0);
+  entry.fh = Math.max(0, Number(entry.fh) || 0);
+  entry.width = Number(entry.width) > 0 ? Number(entry.width) : 1;
+  entry.height = Number(entry.height) > 0 ? Number(entry.height) : 1;
+  entry.defaultScale = Number(entry.defaultScale) > 0 ? Number(entry.defaultScale) : 1;
+  entry.animated = !!entry.animated;
+  if (!entry.img) {
+    entry.img = new Image();
+    if (typeof entry.image === 'string') entry.img.src = entry.image;
+  }
+  spriteTypes.push(entry);
+  addSpritePickerButton(entry);
+  return entry;
+}
+function unregisterSpriteType(typeId) {
+  const index = spriteTypes.findIndex(item => item.id === typeId);
+  if (index < 0) return false;
+  const [type] = spriteTypes.splice(index, 1);
+  if (armedSprite === type) armedSprite = null;
+  for (let i = placedSprites.length - 1; i >= 0; i--) {
+    if (placedSprites[i].type.id === typeId) placedSprites.splice(i, 1);
+  }
+  if (selectedSprite?.type?.id === typeId) {
+    selectedSprite = null;
+    document.getElementById('placed-controls').hidden = true;
+  }
+  document.querySelectorAll('.sprite-choice').forEach(item => {
+    if (item.dataset.sprite === typeId) item.remove();
+  });
+  canvas.style.cursor = armedSprite ? 'copy' : 'default';
+  return true;
+}
+function placeSpriteAt(typeId, x, y) {
+  if (readOnlyView) return null;
+  const type = spriteTypes.find(item => item.id === typeId);
+  if (!type) throw new TypeError(`Unknown sprite type: ${typeId}`);
+  const column = Math.round(Number(x));
+  const row = Math.round(Number(y));
+  if (!Number.isFinite(column) || !Number.isFinite(row)) throw new TypeError('placeSpriteAt needs numeric tile coordinates.');
+  if (column < 0 || row < 0 || column >= GRID || row >= GRID) return null;
+  return placeSprite(type, column, row);
+}
+function listSpriteTypes() {
+  return spriteTypes.map(({ id, name, width, height, defaultScale, custom, assetId, animated, frames }) => ({
+    id, name, width, height, defaultScale, custom: !!custom, assetId: assetId || null, animated: !!animated, frames
+  }));
 }
 function setLocation(x, y) {
   x = Math.max(0, Math.min(GRID - 1, Math.round(x)));
@@ -1333,3 +1409,43 @@ window.addEventListener('keydown', event => {
 document.getElementById('return-to-editor').addEventListener('click', returnToEditor);
 resize();
 requestAnimationFrame(render);
+
+const aiReadyCallbacks = new Set();
+let aiReady = false;
+let resolveAiReady;
+const aiReadyPromise = new Promise(resolve => { resolveAiReady = resolve; });
+function onAiReady(callback) {
+  if (typeof callback !== 'function') throw new TypeError('onReady expects a function.');
+  if (aiReady) {
+    queueMicrotask(() => callback(window.ObliqueAI));
+    return () => {};
+  }
+  aiReadyCallbacks.add(callback);
+  return () => aiReadyCallbacks.delete(callback);
+}
+function markAiReady() {
+  if (aiReady) return;
+  aiReady = true;
+  const api = window.ObliqueAI;
+  resolveAiReady(api);
+  for (const callback of [...aiReadyCallbacks]) {
+    try {
+      callback(api);
+    } catch {
+    }
+  }
+  aiReadyCallbacks.clear();
+  window.dispatchEvent(new CustomEvent('oblique:ai-ready', { detail: api }));
+}
+const obliqueAI = {
+  version: 1,
+  registerSpriteType,
+  unregisterSpriteType,
+  placeSpriteAt,
+  listSpriteTypes,
+  onReady: onAiReady,
+  ready: aiReadyPromise
+};
+setSpriteRegistrar(registerSpriteType, unregisterSpriteType);
+window.ObliqueAI = obliqueAI;
+restoreCustomSprites().catch(() => null).finally(markAiReady);
